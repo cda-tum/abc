@@ -674,6 +674,13 @@ char * Scl_LibertyReadPinFormula( Scl_Tree_t * p, Scl_Item_t * pPin )
         return Scl_LibertyReadString(p, pFunc->Head);
     return NULL;
 }
+char * Scl_LibertyReadPowerFormula( Scl_Tree_t * p, Scl_Item_t * pPow )
+{
+    Scl_Item_t * pFunc;
+    Scl_ItemForEachChildName( p, pPow, pFunc, "when" )
+        return Scl_LibertyReadString(p, pFunc->Head);
+    return NULL;
+}
 int Scl_LibertyReadCellIsThreeState( Scl_Tree_t * p, Scl_Item_t * pCell )
 {
     Scl_Item_t * pPin, * pItem;
@@ -988,6 +995,50 @@ Vec_Ptr_t * Scl_LibertyReadPinTimingAll( Scl_Tree_t * p, Scl_Item_t * pPinOut, c
                 Vec_PtrPush( vTimings, pTiming );
     return vTimings;
 }
+
+Vec_Ptr_t *Scl_LibertyReadPowerOutAll(Scl_Tree_t *p, Scl_Item_t *pPinOut) {
+    Vec_Ptr_t *vPowers;
+    Scl_Item_t *pPower, *pPinIn;
+    int fOut = 0;
+    vPowers = Vec_PtrAlloc(16);
+    Scl_ItemForEachChildName(p, pPinOut, pPower, "internal_power")
+    {
+        Scl_ItemForEachChildName(p, pPower, pPinIn, "related_pin")
+        {
+            fOut = 1;
+        }
+        if (fOut)
+            Vec_PtrPush(vPowers, pPower);
+        else
+        {
+            printf("Wrong internal_power() format\n");
+            return 0;
+        }
+    }
+    return vPowers;
+}
+
+Vec_Ptr_t *Scl_LibertyReadPowerInAll(Scl_Tree_t *p, Scl_Item_t *pPinOut) {
+    Vec_Ptr_t *vPowers;
+    Scl_Item_t *pPower, *pPinIn;
+    int fOut = 0;
+    vPowers = Vec_PtrAlloc(16);
+    Scl_ItemForEachChildName(p, pPinOut, pPower, "internal_power")
+    {
+        Scl_ItemForEachChildName(p, pPower, pPinIn, "related_pin")
+        {
+            fOut = 1;
+        }
+        if (!fOut)
+            Vec_PtrPush(vPowers, pPower);
+        else
+        {
+            printf("Wrong internal_power() format\n");
+            return 0;
+        }
+    }
+    return vPowers;
+}
 int Scl_LibertyReadTimingSense( Scl_Tree_t * p, Scl_Item_t * pPin )
 {
     Scl_Item_t * pItem;
@@ -1045,6 +1096,115 @@ void Scl_LibertyDumpTables( Vec_Str_t * vOut, Vec_Flt_t * vInd1, Vec_Flt_t * vIn
         Vec_StrPutF_( vOut, 0 );
     Vec_StrPut_( vOut );
     Vec_StrPut_( vOut );
+}
+void Scl_LibertyDumpTablesPowerIn( Vec_Str_t * vOut, Vec_Flt_t * vInd1, Vec_Flt_t * vValues )
+{
+    int i; float Entry;
+    // write entries
+    Vec_StrPutI_( vOut, Vec_FltSize(vInd1) );
+    Vec_FltForEachEntry( vInd1, Entry, i )
+        Vec_StrPutF_( vOut, Entry );
+    Vec_StrPut_( vOut );
+    // write entries
+    Vec_FltForEachEntry( vValues, Entry, i )
+    {
+        Vec_StrPutF_( vOut, Entry );
+    }
+    // dump approximations
+    Vec_StrPut_( vOut );
+    for ( i = 0; i < 3; i++ )
+        Vec_StrPutF_( vOut, 0 );
+    for ( i = 0; i < 4; i++ )
+        Vec_StrPutF_( vOut, 0 );
+    for ( i = 0; i < 6; i++ )
+        Vec_StrPutF_( vOut, 0 );
+    Vec_StrPut_( vOut );
+    Vec_StrPut_( vOut );
+}
+int Scl_LibertyScanTableIn( Scl_Tree_t * p, Vec_Ptr_t * vOut, Scl_Item_t * pPower, char * pName, Vec_Ptr_t * vTemples )
+{
+    Vec_Flt_t * vIndex1 = NULL;;
+    Vec_Flt_t * vValues = NULL;
+    Vec_Flt_t * vInd1;
+    Scl_Item_t * pItem, * pTable = NULL;
+    char * pThis, * pTempl = NULL;
+    int iPlace, i;
+    float Entry;
+    // find the table
+    Scl_ItemForEachChildName( p, pPower, pTable, pName )
+            break;
+    if ( pTable == NULL )
+        return 0;
+    // find the template
+    pTempl = Scl_LibertyReadString(p, pTable->Head);
+    if ( pTempl == NULL || pTempl[0] == 0 )
+    {
+        // read the numbers
+        Scl_ItemForEachChild( p, pTable, pItem )
+        {
+            if ( !Scl_LibertyCompare(p, pItem->Key, "index_1") )
+                assert(vIndex1 == NULL), vIndex1 = Scl_LibertyReadFloatVec( Scl_LibertyReadString(p, pItem->Head) );
+            else if ( !Scl_LibertyCompare(p, pItem->Key, "values") )
+                assert(vValues == NULL), vValues = Scl_LibertyReadFloatVec( Scl_LibertyReadString(p, pItem->Head) );
+        }
+        if ( vIndex1 == NULL || vValues == NULL )
+        { printf( "Incomplete table specification\n" ); return 0; }
+        // dump the table
+        vInd1 = vIndex1;
+        // write entries
+        Vec_PtrPush( vOut, vInd1 );
+        Vec_PtrPush( vOut, vValues );
+    }
+    else if ( !strcmp(pTempl, "scalar") )
+    {
+        Scl_ItemForEachChild( p, pTable, pItem )
+            if ( !Scl_LibertyCompare(p, pItem->Key, "values") )
+            {
+                assert(vValues == NULL);
+                vValues = Scl_LibertyReadFloatVec( Scl_LibertyReadString(p, pItem->Head) );
+                assert( Vec_FltSize(vValues) == 1 );
+                // write entries
+                Vec_PtrPush( vOut, Vec_IntStart(1) );
+                Vec_PtrPush( vOut, Vec_IntStart(1) );
+                Vec_PtrPush( vOut, vValues );
+                break;
+            }
+            else
+            { printf( "Cannot read \"scalar\" template\n" ); return 0; }
+    }
+    else
+    {
+        // fetch the template
+        iPlace = -1;
+        Vec_PtrForEachEntry( char *, vTemples, pThis, i )
+            if ( i % 2 == 0 && !strcmp(pTempl, pThis) )
+            {
+                iPlace = i;
+                break;
+            }
+        if ( iPlace == -1 )
+        { printf( "Template cannot be found in the template library\n" ); return 0; }
+        // read the numbers
+        Scl_ItemForEachChild( p, pTable, pItem )
+        {
+            if ( !Scl_LibertyCompare(p, pItem->Key, "index_1") )
+                assert(vIndex1 == NULL), vIndex1 = Scl_LibertyReadFloatVec( Scl_LibertyReadString(p, pItem->Head) );
+            else if ( !Scl_LibertyCompare(p, pItem->Key, "values") )
+                assert(vValues == NULL), vValues = Scl_LibertyReadFloatVec( Scl_LibertyReadString(p, pItem->Head) );
+        }
+        // check the template style
+        vInd1 = (Vec_Flt_t *)Vec_PtrEntry( vTemples, iPlace + 2 );
+
+        assert( !vIndex1 || Vec_FltSize(vIndex1) == Vec_FltSize(vInd1) );
+        vInd1 = vIndex1 ? vIndex1 : vInd1;
+        // write entries
+        Vec_PtrPush( vOut, Vec_FltDup(vInd1) );
+        Vec_PtrPush( vOut, Vec_FltDup(vValues) );
+
+        Vec_FltFreeP( &vIndex1 );
+        Vec_FltFreeP( &vValues );
+    }
+    return 1;
 }
 int Scl_LibertyScanTable( Scl_Tree_t * p, Vec_Ptr_t * vOut, Scl_Item_t * pTiming, char * pName, Vec_Ptr_t * vTemples )
 {
@@ -1205,6 +1365,42 @@ int Scl_LibertyComputeWorstCase( Vec_Ptr_t * vTables, Vec_Flt_t ** pvInd0, Vec_F
     // return the result
     *pvInd0 = vInd0;
     *pvInd1 = vInd1;
+    *pvValues = vValues;
+    return 1;
+}
+int Scl_LibertyComputeWorstCasePowerIn( Vec_Ptr_t * vTables, Vec_Flt_t ** pvInd0, Vec_Flt_t ** pvValues )
+{
+    Vec_Flt_t * vInd0, * vValues;
+    Vec_Flt_t * vind0, * vvalues;
+    int i, k, nPairs = Vec_PtrSize(vTables) / 2;
+    float Entry;
+    assert( Vec_PtrSize(vTables) > 0 && Vec_PtrSize(vTables) % 2 == 0 );
+    if ( nPairs == 1 )
+    {
+        *pvInd0   = (Vec_Flt_t *)Vec_PtrEntry(vTables, 0);
+        *pvValues = (Vec_Flt_t *)Vec_PtrEntry(vTables, 1);
+        Vec_PtrShrink( vTables, 0 );
+        return 1;
+    }
+    vInd0   = Vec_FltDup( (Vec_Flt_t *)Vec_PtrEntry(vTables, 0) );
+    vValues = Vec_FltDup( (Vec_Flt_t *)Vec_PtrEntry(vTables, 1) );
+    for ( i = 1; i < nPairs; i++ )
+    {
+        vind0   = (Vec_Flt_t *)Vec_PtrEntry(vTables, i*2+0);
+        vvalues = (Vec_Flt_t *)Vec_PtrEntry(vTables, i*2+1);
+        // check equality of indexes
+        if ( !Vec_FltEqual(vind0, vInd0) )
+            continue;//return 0;
+//        Vec_FltForEachEntry( vvalues, Entry, k )
+//            Vec_FltAddToEntry( vValues, k, Entry );
+        Vec_FltForEachEntry( vvalues, Entry, k )
+            if ( Vec_FltEntry(vValues, k) < Entry )
+                Vec_FltWriteEntry( vValues, k, Entry );
+    }
+//    Vec_FltForEachEntry( vValues, Entry, k )
+//        Vec_FltWriteEntry( vValues, k, Entry/nTriples );
+    // return the result
+    *pvInd0 = vInd0;
     *pvValues = vValues;
     return 1;
 }
@@ -1429,19 +1625,120 @@ Vec_Ptr_t * Scl_LibertyReadTemplates( Scl_Tree_t * p )
 //    Scl_LibertyPrintTemplates( vRes );
     return vRes;
 }
+Vec_Ptr_t * Scl_LibertyReadPowerInTemplates( Scl_Tree_t * p )
+{
+    Vec_Ptr_t * vRes = NULL;
+    Vec_Flt_t * vIndex1;
+    Scl_Item_t * pTempl, * pItem;
+    char * pVar1;
+    int fFlag;
+    vRes = Vec_PtrAlloc( 100 );
+    Scl_ItemForEachChildName( p, Scl_LibertyRoot(p), pTempl, "power_lut_template" )
+    {
+        pVar1  = NULL;
+        vIndex1  = NULL;
+        Scl_ItemForEachChild( p, pTempl, pItem )
+        {
+            if ( !Scl_LibertyCompare(p, pItem->Key, "index_1") )
+                assert(vIndex1 == NULL), vIndex1 = Scl_LibertyReadFloatVec( Scl_LibertyReadString(p, pItem->Head) );
+            else if ( !Scl_LibertyCompare(p, pItem->Key, "variable_1") )
+                assert(pVar1 == NULL), pVar1 = Abc_UtilStrsav( Scl_LibertyReadString(p, pItem->Head) );
+        }
+        if ( pVar1 == NULL )
+        {
+            ABC_FREE( pVar1 );
+            Vec_FltFreeP( &vIndex1 );
+            continue;
+        }
+        assert( pVar1 != NULL );
+        fFlag = (!Scl_LibertyCompare(p, pTempl->Head, "pwr_tin_7"));
+        ABC_FREE( pVar1 );
+        if ( !fFlag )
+        {
+            Vec_FltFreeP( &vIndex1 );
+            continue;
+        }
+        Vec_PtrPush( vRes, Abc_UtilStrsav( Scl_LibertyReadString(p, pTempl->Head) ) );
+        Vec_PtrPush( vRes, fFlag ? NULL : (void *)(ABC_PTRINT_T)1 );
+        Vec_PtrPush( vRes, fFlag ? vIndex1 : NULL );
+    }
+    if ( Vec_PtrSize(vRes) == 0 )
+        Abc_Print( 0, "Templates are not defined.\n" );
+
+    return vRes;
+}
+Vec_Ptr_t * Scl_LibertyReadPowerOutTemplates( Scl_Tree_t * p )
+{
+    Vec_Ptr_t * vRes = NULL;
+    Vec_Flt_t * vIndex1, * vIndex2;
+    Scl_Item_t * pTempl, * pItem;
+    char * pVar1, * pVar2;
+    int fFlag0, fFlag1;
+    vRes = Vec_PtrAlloc( 100 );
+    Scl_ItemForEachChildName( p, Scl_LibertyRoot(p), pTempl, "power_lut_template" )
+    {
+        pVar1 = pVar2 = NULL;
+        vIndex1 = vIndex2 = NULL;
+        Scl_ItemForEachChild( p, pTempl, pItem )
+        {
+            if ( !Scl_LibertyCompare(p, pItem->Key, "index_1") )
+                assert(vIndex1 == NULL), vIndex1 = Scl_LibertyReadFloatVec( Scl_LibertyReadString(p, pItem->Head) );
+            else if ( !Scl_LibertyCompare(p, pItem->Key, "index_2") )
+                assert(vIndex2 == NULL), vIndex2 = Scl_LibertyReadFloatVec( Scl_LibertyReadString(p, pItem->Head) );
+            else if ( !Scl_LibertyCompare(p, pItem->Key, "variable_1") )
+                assert(pVar1 == NULL), pVar1 = Abc_UtilStrsav( Scl_LibertyReadString(p, pItem->Head) );
+            else if ( !Scl_LibertyCompare(p, pItem->Key, "variable_2") )
+                assert(pVar2 == NULL), pVar2 = Abc_UtilStrsav( Scl_LibertyReadString(p, pItem->Head) );
+        }
+        if ( pVar1 == NULL || pVar2 == NULL )
+        {
+            ABC_FREE( pVar1 );
+            ABC_FREE( pVar2 );
+            Vec_FltFreeP( &vIndex1 );
+            Vec_FltFreeP( &vIndex2 );
+            continue;
+        }
+        assert( pVar1 != NULL && pVar2 != NULL );
+        fFlag0 = (!strcmp(pVar1, "input_transition_time") && !strcmp(pVar2, "total_output_net_capacitance"));
+        fFlag1 = (!strcmp(pVar2, "input_transition_time") && !strcmp(pVar1, "total_output_net_capacitance"));
+
+        ABC_FREE( pVar1 );
+        ABC_FREE( pVar2 );
+        if ( !fFlag0 && !fFlag1 )
+        {
+            Vec_FltFreeP( &vIndex1 );
+            Vec_FltFreeP( &vIndex2 );
+            continue;
+        }
+        Vec_PtrPush( vRes, Abc_UtilStrsav( Scl_LibertyReadString(p, pTempl->Head) ) );
+        Vec_PtrPush( vRes, fFlag0 ? NULL : (void *)(ABC_PTRINT_T)1 );
+        Vec_PtrPush( vRes, fFlag0 ? vIndex1 : vIndex2 );
+        Vec_PtrPush( vRes, fFlag0 ? vIndex2 : vIndex1 );
+    }
+    if ( Vec_PtrSize(vRes) == 0 )
+        Abc_Print( 0, "Templates are not defined.\n" );
+
+    return vRes;
+}
 Vec_Str_t * Scl_LibertyReadSclStr( Scl_Tree_t * p, int fVerbose, int fVeryVerbose )
 {
     int fUseFirstTable = 0;
     Vec_Str_t * vOut;
-    Vec_Ptr_t * vNameIns, * vTemples = NULL;
-    Scl_Item_t * pCell, * pPin, * pTiming;
+    Vec_Ptr_t * vNameIns, * vTemples = NULL, * vPowerInTemples = NULL, * vPowerOutTemples = NULL;
+    Scl_Item_t * pCell, * pPin, * pTiming, *pPower, *rPin;
     Vec_Wrd_t * vTruth;
     char * pFormula, * pName;
-    int i, k, Counter, nOutputs, nCells;
+    int i, k, j, Counter, nOutputs, nCells;
     int nSkipped[4] = {0};
 
     // read delay-table templates
     vTemples = Scl_LibertyReadTemplates( p );
+
+    //read power-table templates for input pins
+    vPowerInTemples = Scl_LibertyReadPowerInTemplates( p );
+
+    //read power-table templates for output pins
+    vPowerOutTemples = Scl_LibertyReadPowerOutTemplates( p );
 
     // start the library
     vOut = Vec_StrAlloc( 10000 );
@@ -1541,6 +1838,58 @@ Vec_Str_t * Scl_LibertyReadSclStr( Scl_Tree_t * p, int fVerbose, int fVeryVerbos
             Vec_StrPutF_( vOut, CapRise );
             Vec_StrPutF_( vOut, CapFall );
             Vec_StrPut_( vOut );
+        }
+        Scl_ItemForEachChildName( p, pCell, pPin, "pin" )
+        {
+            if ( Scl_LibertyReadPinFormula(p, pPin) != NULL ) // skip output pin
+                continue;
+            assert( Scl_LibertyReadPinDirection(p, pPin) == 0 || Scl_LibertyReadPinDirection(p, pPin) == 2 );
+            // write the internal power tables for each input pin
+            Vec_Ptr_t * vTables[2];
+            Vec_Ptr_t * vPowers;
+            // count power entries
+            vPowers = Scl_LibertyReadPowerInAll( p, pPin );
+            Vec_StrPutI_(vOut, (int) Vec_PtrSize(vPowers));
+            if ( Vec_PtrSize(vPowers) == 0 ) // no power values given
+            {
+                Vec_PtrFree( vPowers );
+                continue;
+            }
+            Vec_PtrForEachEntry( Scl_Item_t *, vPowers, pPower, k )
+            {
+                // write TruthFormula and TruthTable
+                char* pPowerFormula = Scl_LibertyReadPowerFormula( p, pPower );
+                Vec_StrPutS_(vOut, pPowerFormula);
+                vTruth = Mio_ParseFormulaTruth( pPowerFormula, (char **)Vec_PtrArray(vNameIns), Vec_PtrSize(vNameIns) );
+                if ( vTruth == NULL )
+                    return NULL;
+                for ( i = 0; i < Abc_Truth6WordNum(Vec_PtrSize(vNameIns)); i++ )
+                    Vec_StrPutW_( vOut, Vec_WrdEntry(vTruth, i) );
+                Vec_WrdFree( vTruth );
+                // write power entries
+                for ( j = 0; j < 2; j++ )
+                    vTables[j] = Vec_PtrAlloc(16);
+                // collect the power tables
+                if ( !Scl_LibertyScanTableIn( p, vTables[0], pPower, "rise_power",  vPowerInTemples ) )
+                    if ( !Scl_LibertyScanTableIn(p, vTables[0], pPower, "fall_power",vPowerInTemples ) )
+                    { printf("Table cannot be found\n"); return NULL; }
+                if ( !Scl_LibertyScanTableIn(p, vTables[1], pPower, "fall_power",    vPowerInTemples ) )
+                    if ( !Scl_LibertyScanTableIn(p, vTables[1], pPower, "rise_power",vPowerInTemples ) )
+                    { printf("Table cannot be found\n"); return NULL; }
+
+                // compute worse case of the tables
+                for ( j = 0; j < 2; j++ )
+                {
+                    Vec_Flt_t *vInd0, *vValues;
+                    if ( !Scl_LibertyComputeWorstCasePowerIn( vTables[j], &vInd0, &vValues ) )
+                    { printf("Table indexes have different values\n"); return NULL; }
+                    Vec_VecFree( (Vec_Vec_t *) vTables[j] );
+                    Scl_LibertyDumpTablesPowerIn( vOut, vInd0, vValues );
+                    Vec_FltFree( vInd0 );
+                    Vec_FltFree( vValues );
+                }
+            }
+            Vec_PtrFree( vPowers );
         }
         Vec_StrPut_( vOut );
         // output pins
@@ -1666,6 +2015,36 @@ Vec_Str_t * Scl_LibertyReadSclStr( Scl_Tree_t * p, int fVerbose, int fVeryVerbos
                 Vec_FltFree( vArray );
         }
         Vec_PtrFree( vTemples );
+    }
+    if ( vPowerInTemples )
+    {
+        Vec_Flt_t * vArray;
+        assert( Vec_PtrSize(vPowerInTemples) % 3 == 0 );
+        Vec_PtrForEachEntry( Vec_Flt_t *, vPowerInTemples, vArray, i )
+        {
+            if ( vArray == NULL )
+                continue;
+            if ( i % 3 == 0 )
+                ABC_FREE( vArray );
+            else if ( i % 3 == 2 )
+                Vec_FltFree( vArray );
+        }
+        Vec_PtrFree( vPowerInTemples );
+    }
+    if ( vPowerOutTemples )
+    {
+        Vec_Flt_t * vArray;
+        assert( Vec_PtrSize(vPowerOutTemples) % 4 == 0 );
+        Vec_PtrForEachEntry( Vec_Flt_t *, vPowerOutTemples, vArray, i )
+        {
+            if ( vArray == NULL )
+                continue;
+            if ( i % 4 == 0 )
+                ABC_FREE( vArray );
+            else if ( i % 4 == 2 || i % 4 == 3 )
+                Vec_FltFree( vArray );
+        }
+        Vec_PtrFree( vPowerOutTemples );
     }
     if ( fVerbose )
     {

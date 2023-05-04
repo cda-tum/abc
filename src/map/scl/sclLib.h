@@ -116,6 +116,8 @@ typedef struct SC_TableTempl_  SC_TableTempl;
 typedef struct SC_Surface_     SC_Surface;
 typedef struct SC_Timing_      SC_Timing;
 typedef struct SC_Timings_     SC_Timings;
+typedef struct SC_Power_       SC_Power;
+typedef struct SC_Powers_       SC_Powers;
 typedef struct SC_Pin_         SC_Pin;
 typedef struct SC_Cell_        SC_Cell;
 typedef struct SC_Lib_         SC_Lib;
@@ -147,16 +149,16 @@ struct SC_TableTempl_
 struct SC_Surface_ 
 {
     char *         pName;
-    Vec_Flt_t      vIndex0;        // Vec<float>       -- correspondes to "index_1" in the liberty file (for timing: slew)
-    Vec_Flt_t      vIndex1;        // Vec<float>       -- correspondes to "index_2" in the liberty file (for timing: load)
-    Vec_Ptr_t      vData;          // Vec<Vec<float> > -- 'data[i0][i1]' gives value at '(index0[i0], index1[i1])' 
-    Vec_Int_t      vIndex0I;       // Vec<float>       -- correspondes to "index_1" in the liberty file (for timing: slew)
-    Vec_Int_t      vIndex1I;       // Vec<float>       -- correspondes to "index_2" in the liberty file (for timing: load)
-    Vec_Ptr_t      vDataI;         // Vec<Vec<float> > -- 'data[i0][i1]' gives value at '(index0[i0], index1[i1])' 
+    Vec_Flt_t      vIndex0;        // Vec<float>       -- correspondes to "index_1" in the liberty file (for timing: slew) (for power input and output pins)
+    Vec_Flt_t      vIndex1;        // Vec<float>       -- correspondes to "index_2" in the liberty file (for timing: load) (for power output pins)
+    Vec_Ptr_t      vData;          // Vec<Vec<float> > -- 'data[i0][i1]' gives value at '(index0[i0], index1[i1])'
+    Vec_Int_t      vIndex0I;       // Vec<float>       -- correspondes to "index_1" in the liberty file (for timing: slew) (for power input and output pins)
+    Vec_Int_t      vIndex1I;       // Vec<float>       -- correspondes to "index_2" in the liberty file (for timing: load) (for power output pins)
+    Vec_Ptr_t      vDataI;         // Vec<Vec<float> > -- 'data[i0][i1]' gives value at '(index0[i0], index1[i1])'
     float          approx[3][6];
 };
 
-struct SC_Timing_ 
+struct SC_Timing_
 {
     char *         related_pin;    // -- related pin
     SC_TSense      tsense;         // -- timing sense (positive_unate, negative_unate, non_unate)
@@ -167,17 +169,34 @@ struct SC_Timing_
     SC_Surface     pFallTrans;
 };
 
-struct SC_Timings_ 
+struct SC_Timings_
 {
     char *         pName;          // -- the 'related_pin' field
     Vec_Ptr_t      vTimings;       // structures of type SC_Timing
 };
 
-struct SC_Pin_ 
+struct SC_Power_
+{
+    char *         related_pin;    // }- used for input pins (related pin)
+    char *         when_text;      // -- logic condition on inputs triggering this delay model for the output
+    Vec_Wrd_t      vFunc;          // }
+    SC_Surface     pCellRise;      // -- Used to compute pin-to-pin dynamic power dissipation
+    SC_Surface     pCellFall;
+};
+
+struct SC_Powers_
+{
+    char *         pName;          // -- the 'related_pin' field (not used for input pins)
+    Vec_Ptr_t      vPowers;        // structures of type SC_Power_
+};
+
+struct SC_Pin_
 {
     char *         pName;
     SC_Dir         dir;
     float          cap;            // -- this value is used if 'rise_cap' and 'fall_cap' is missing (copied by 'postProcess()'). (not used)
+    float          rise_power;     // }- used for input and output pins
+    float          fall_power;     // }
     float          rise_cap;       // }- used for input pins ('cap' too).
     float          fall_cap;       // }
     int            rise_capI;      // }- used for input pins ('cap' too).
@@ -187,10 +206,11 @@ struct SC_Pin_
     char *         func_text;      // }
     Vec_Wrd_t      vFunc;          // }
     Vec_Ptr_t      vRTimings;      // -- for output pins
-//    SC_Timing      Timing;         // -- for output pins  
+    Vec_Ptr_t      vRPowers;       // -- for power
+//    SC_Timing      Timing;         // -- for output pins
 };
 
-struct SC_Cell_ 
+struct SC_Cell_
 {
     char *         pName;
     int            Id;
@@ -202,7 +222,7 @@ struct SC_Cell_
     int            areaI;
     int            leakageI;
     int            drive_strength; // -- some library files provide this field (currently unused, but may be a good hint for sizing) (not used)
-    Vec_Ptr_t      vPins;          // NamedSet<SC_Pin> 
+    Vec_Ptr_t      vPins;          // NamedSet<SC_Pin>
     int            n_inputs;       // -- 'pins[0 .. n_inputs-1]' are input pins
     int            n_outputs;      // -- 'pins[n_inputs .. n_inputs+n_outputs-1]' are output pins
     SC_Cell *      pNext;          // same-functionality cells linked into a ring by area
@@ -270,6 +290,7 @@ static inline char *      SC_CellPinName( SC_Cell * p, int i )      { return SC_
 #define SC_RingForEachCell( pRing, pCell, i )    for ( i = 0, pCell = pRing; i == 0 || pCell != pRing; pCell = pCell->pNext, i++ )
 #define SC_RingForEachCellRev( pRing, pCell, i ) for ( i = 0, pCell = pRing; i == 0 || pCell != pRing; pCell = pCell->pPrev, i++ )
 #define SC_PinForEachRTiming( p, pRTime, i )     Vec_PtrForEachEntry( SC_Timings *, &p->vRTimings, pRTime, i )
+#define SC_PinForEachRPower( p, pRPower, i )     Vec_PtrForEachEntry( SC_Powers *, &p->vRPowers, pRPower, i )
 
 
 ////////////////////////////////////////////////////////////////////////
@@ -281,7 +302,7 @@ static inline char *      SC_CellPinName( SC_Cell * p, int i )      { return SC_
   Synopsis    [Constructors of the library data-structures.]
 
   Description []
-               
+
   SideEffects []
 
   SeeAlso     []
@@ -321,6 +342,18 @@ static inline SC_Timings * Abc_SclTimingsAlloc()
 {
     SC_Timings * p;
     p = ABC_CALLOC( SC_Timings, 1 );
+    return p;
+}
+static inline SC_Power * Abc_SclPowerAlloc()
+{
+    SC_Power * p;
+    p = ABC_CALLOC( SC_Power, 1 );
+    return p;
+}
+static inline SC_Powers * Abc_SclPowersAlloc()
+{
+    SC_Powers * p;
+    p = ABC_CALLOC( SC_Powers, 1 );
     return p;
 }
 static inline SC_Pin * Abc_SclPinAlloc()
@@ -414,13 +447,36 @@ static inline void Abc_SclTimingsFree( SC_Timings * p )
     ABC_FREE( p->pName );
     ABC_FREE( p );
 }
+static inline void Abc_SclPowerFree( SC_Power * p )
+{
+    Abc_SclSurfaceFree( &p->pCellRise );
+    Abc_SclSurfaceFree( &p->pCellFall );
+    ABC_FREE( p->related_pin );
+    ABC_FREE( p->when_text );
+    Vec_WrdErase( &p->vFunc );
+    ABC_FREE( p );
+}
+static inline void Abc_SclPowersFree( SC_Powers * p )
+{
+    SC_Power * pTemp;
+    int i;
+    Vec_PtrForEachEntry( SC_Power *, &p->vPowers, pTemp, i )
+        Abc_SclPowerFree( pTemp );
+    Vec_PtrErase( &p->vPowers );
+    ABC_FREE( p->pName );
+    ABC_FREE( p );
+}
 static inline void Abc_SclPinFree( SC_Pin * p )
 {
-    SC_Timings * pTemp;
+    SC_Timings * pTemp_t;
+    SC_Powers * pTemp_p;
     int i;
-    SC_PinForEachRTiming( p, pTemp, i )
-        Abc_SclTimingsFree( pTemp );
+    SC_PinForEachRTiming( p, pTemp_t, i )
+        Abc_SclTimingsFree( pTemp_t );
+    SC_PinForEachRPower( p, pTemp_p, i)
+        Abc_SclPowersFree( pTemp_p);
     Vec_PtrErase( &p->vRTimings );
+    Vec_PtrErase( &p->vRPowers );
     Vec_WrdErase( &p->vFunc );
     ABC_FREE( p->func_text );
     ABC_FREE( p->pName );

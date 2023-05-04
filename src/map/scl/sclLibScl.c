@@ -231,9 +231,39 @@ static void Abc_SclReadSurface( Vec_Str_t * vOut, int * pPos, SC_Surface * p )
     for ( i = 0; i < 6; i++ ) 
         p->approx[2][i] = Vec_StrGetF( vOut, pPos );
 }
+static void Abc_SclReadSurfacePowerIn( Vec_Str_t * vOut, int * pPos, SC_Surface * p )
+{
+    Vec_Flt_t * vVec;
+    Vec_Int_t * vVecI;
+    int i, j;
+
+    for ( i = Vec_StrGetI(vOut, pPos); i != 0; i-- )
+    {
+        float Num = Vec_StrGetF(vOut, pPos);
+        Vec_FltPush( &p->vIndex0, Num );
+        Vec_IntPush( &p->vIndex0I, Scl_Flt2Int(Num) );
+    }
+    vVec = Vec_FltAlloc( 1 );
+    Vec_PtrPush( &p->vData, vVec );
+    vVecI = Vec_IntAlloc( 1 );
+    Vec_PtrPush( &p->vDataI, vVecI );
+    for ( j = 0; j < Vec_FltSize(&p->vIndex0); j++ )
+    {
+        float Num = Vec_StrGetF(vOut, pPos);
+        Vec_FltPush( vVec, Num );
+        Vec_IntPush( vVecI, Scl_Flt2Int(Num) );
+    }
+
+    for ( i = 0; i < 3; i++ )
+        p->approx[0][i] = Vec_StrGetF( vOut, pPos );
+    for ( i = 0; i < 4; i++ )
+        p->approx[1][i] = Vec_StrGetF( vOut, pPos );
+    for ( i = 0; i < 6; i++ )
+        p->approx[2][i] = Vec_StrGetF( vOut, pPos );
+}
 static int Abc_SclReadLibrary( Vec_Str_t * vOut, int * pPos, SC_Lib * p )
 {
-    int i, j, k, n;
+    int i, j, k, n, m;
     int version = Vec_StrGetI( vOut, pPos );
     if ( version != ABC_SCL_CUR_VERSION )
     { 
@@ -320,6 +350,57 @@ static int Abc_SclReadLibrary( Vec_Str_t * vOut, int * pPos, SC_Lib * p )
             pPin->rise_capI = Scl_Flt2Int(pPin->rise_cap);
             pPin->fall_capI = Scl_Flt2Int(pPin->fall_cap);
         }
+        // read 'r_internal_power': (power tables for this particular input)
+        for ( j = 0; j < pCell->n_inputs; j++ )
+        {
+            SC_Pin * pPin_p = Vec_PtrEntry( &(pCell->vPins),j );
+            SC_Powers * pRPower = Abc_SclPowersAlloc();
+            Vec_PtrPush( &pPin_p->vRPowers, pRPower );
+
+            for ( k = Vec_StrGetI(vOut, pPos); k != 0 ; k-- )
+            {
+                SC_Power * pPower = Abc_SclPowerAlloc();
+                Vec_PtrPush( &pRPower->vPowers, pPower );
+                // read function
+                pPower->when_text = Vec_StrGetS( vOut, pPos );
+                if ( pPower->when_text[0] == 0 )
+                {
+                    // when_text is not given - read truth table
+                    ABC_FREE( pPower->when_text );
+                    assert( Vec_WrdSize(&pPower->vFunc) == 0 );
+                    Vec_WrdGrow( &pPower->vFunc, Abc_Truth6WordNum(pCell->n_inputs) );
+                    for ( k = 0; k < Vec_WrdCap(&pPower->vFunc); k++ )
+                        Vec_WrdPush( &pPower->vFunc, Vec_StrGetW(vOut, pPos) );
+                }
+                else
+                {
+                    // when_text is given - derive truth table
+                    SC_Pin * pPin2;
+                    Vec_Ptr_t * vNames;
+                    Vec_Wrd_t * vFunc;
+                    // collect input names
+                    vNames = Vec_PtrAlloc( pCell->n_inputs );
+                    SC_CellForEachPinIn( pCell, pPin2, m )
+                        Vec_PtrPush( vNames, pPin2->pName );
+                    // derive truth table
+                    assert( Vec_WrdSize(&pPower->vFunc) == 0 );
+                    Vec_WrdErase( &pPower->vFunc );
+                    vFunc = Mio_ParseFormulaTruth( pPower->when_text, (char **)Vec_PtrArray(vNames), pCell->n_inputs );
+                    pPower->vFunc = *vFunc;
+                    ABC_FREE( vFunc );
+                    Vec_PtrFree( vNames );
+                    // skip truth table
+                    assert( Vec_WrdSize(&pPower->vFunc) == Abc_Truth6WordNum(pCell->n_inputs) );
+                    for ( m = 0; m < Vec_WrdSize(&pPower->vFunc); m++ )
+                    {
+                        word Value = Vec_StrGetW(vOut, pPos);
+                        assert( Value == Vec_WrdEntry(&pPower->vFunc, m) );
+                    }
+                }
+                Abc_SclReadSurfacePowerIn( vOut, pPos, &pPower->pCellRise );
+                Abc_SclReadSurfacePowerIn( vOut, pPos, &pPower->pCellFall );
+            }
+        }
 
         for ( j = 0; j < pCell->n_outputs; j++ )
         {
@@ -395,6 +476,54 @@ static int Abc_SclReadLibrary( Vec_Str_t * vOut, int * pPos, SC_Lib * p )
                 }
                 else
                     assert( Vec_PtrSize(&pRTime->vTimings) == 0 );
+            }
+            // read 'r_internal_power': (pin-to-pin power tables for this particular output)
+            for ( k = Vec_StrGetI(vOut, pPos); k != 0 ; k-- )
+            {
+                SC_Powers *pRPower = Abc_SclPowersAlloc();
+                Vec_PtrPush( &pPin->vRPowers, pRPower );
+                pRPower->pName = Vec_StrGetS( vOut, pPos );
+                SC_Power *pPower = Abc_SclPowerAlloc();
+                Vec_PtrPush( &pRPower->vPowers, pPower );
+
+                // read function
+                pPower->when_text = Vec_StrGetS( vOut, pPos );
+                if ( pPower->when_text[0] == 0 )
+                {
+                    // when_text is not given - read truth table
+                    ABC_FREE( pPower->when_text );
+                    assert( Vec_WrdSize(&pPower->vFunc) == 0 );
+                    Vec_WrdGrow( &pPower->vFunc, Abc_Truth6WordNum(pCell->n_inputs) );
+                    for ( k = 0; k < Vec_WrdCap(&pPower->vFunc); k++ )
+                        Vec_WrdPush( &pPower->vFunc, Vec_StrGetW(vOut, pPos) );
+                }
+                else
+                {
+                    // when_text is given - derive truth table
+                    SC_Pin * pPin2;
+                    Vec_Ptr_t * vNames;
+                    Vec_Wrd_t * vFunc;
+                    // collect input names
+                    vNames = Vec_PtrAlloc( pCell->n_inputs );
+                    SC_CellForEachPinIn( pCell, pPin2, m )
+                        Vec_PtrPush( vNames, pPin2->pName );
+                    // derive truth table
+                    assert( Vec_WrdSize(&pPower->vFunc) == 0 );
+                    Vec_WrdErase( &pPower->vFunc );
+                    vFunc = Mio_ParseFormulaTruth( pPower->when_text, (char **)Vec_PtrArray(vNames), pCell->n_inputs );
+                    pPower->vFunc = *vFunc;
+                    ABC_FREE( vFunc );
+                    Vec_PtrFree( vNames );
+                    // skip truth table
+                    assert( Vec_WrdSize(&pPower->vFunc) == Abc_Truth6WordNum(pCell->n_inputs) );
+                    for ( m = 0; m < Vec_WrdSize(&pPower->vFunc); m++ )
+                    {
+                        word Value = Vec_StrGetW(vOut, pPos);
+                        assert( Value == Vec_WrdEntry(&pPower->vFunc, m) );
+                    }
+                }
+                Abc_SclReadSurface( vOut, pPos, &pPower->pCellRise );
+                Abc_SclReadSurface( vOut, pPos, &pPower->pCellFall );
             }
         }
     }
