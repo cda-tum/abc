@@ -1996,6 +1996,61 @@ Vec_Str_t * Scl_LibertyReadSclStr( Scl_Tree_t * p, int fVerbose, int fVeryVerbos
                     Vec_FltFree( vValues );
                 }
             }
+            // write the internal power tables for each output pin
+            Vec_Ptr_t * vTables[2];
+            Vec_Ptr_t * vPowers;
+
+            vPowers = Scl_LibertyReadPowerOutAll( p, pPin );
+            //Vec_StrPutS_(vOut, pName);
+            Vec_StrPutI_( vOut, (int) Vec_PtrSize(vPowers) );
+            if (Vec_PtrSize(vPowers) == 0) // no power values given
+            {
+                Vec_PtrFree(vPowers);
+                continue;
+            }
+            Vec_PtrForEachEntry( Scl_Item_t *, vPowers, pPower, k )
+            {
+                for ( j = 0; j < 2; j++ )
+                    vTables[j] = Vec_PtrAlloc(16);
+                Scl_ItemForEachChildName(p, pPower, rPin, "related_pin")
+                    {
+                        Vec_StrPutS_( vOut, Scl_LibertyReadString( p, rPin->Head ) );
+                    }
+                char * pPowerFormula = Scl_LibertyReadPowerFormula( p, pPower );
+                // In case no power formula is given, the power formula is equal to the literal of the pin
+                if( pPowerFormula == NULL )
+                {
+                    pPowerFormula = pName;
+                }
+                Vec_StrPutS_( vOut, pPowerFormula );
+                vTruth = Mio_ParseFormulaTruth( pPowerFormula, (char **)Vec_PtrArray(vNameIns), Vec_PtrSize(vNameIns) );
+                if ( vTruth == NULL )
+                    return NULL;
+                for ( i = 0; i < Abc_Truth6WordNum(Vec_PtrSize(vNameIns)); i++ )
+                    Vec_StrPutW_( vOut, Vec_WrdEntry(vTruth, i) );
+                Vec_WrdFree( vTruth );
+                // collect the power tables
+                if ( !Scl_LibertyScanTable(p, vTables[0], pPower, "rise_power", vPowerOutTemples ) )
+                    if ( !Scl_LibertyScanTable(p, vTables[0], pPower, "fall_power", vPowerOutTemples ) )
+                    { printf( "Table cannot be found\n" ); return NULL; }
+                if ( !Scl_LibertyScanTable(p, vTables[1], pPower, "fall_power", vPowerOutTemples ) )
+                    if ( !Scl_LibertyScanTable(p, vTables[1], pPower, "rise_power", vPowerOutTemples ) )
+                    { printf( "Table cannot be found\n" ); return NULL; }
+
+                // compute worse case of the tables
+                for ( j = 0; j < 2; j++ )
+                {
+                    Vec_Flt_t * vInd0, * vInd1, * vValues;
+                    if ( !Scl_LibertyComputeWorstCase( vTables[j], &vInd0, &vInd1, &vValues ) )
+                    { printf( "Table indexes have different values\n" ); return NULL; }
+                    Vec_VecFree( (Vec_Vec_t *)vTables[j] );
+                    Scl_LibertyDumpTables( vOut, vInd0, vInd1, vValues );
+                    Vec_FltFree( vInd0 );
+                    Vec_FltFree( vInd1 );
+                    Vec_FltFree( vValues );
+                }
+            }
+            Vec_PtrFree( vPowers );
         }
         Vec_StrPut_( vOut );
         Vec_PtrFreeFree( vNameIns );
