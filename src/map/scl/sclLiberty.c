@@ -1129,7 +1129,6 @@ int Scl_LibertyScanTableIn( Scl_Tree_t * p, Vec_Ptr_t * vOut, Scl_Item_t * pPowe
     Scl_Item_t * pItem, * pTable = NULL;
     char * pThis, * pTempl = NULL;
     int iPlace, i;
-    float Entry;
     // find the table
     Scl_ItemForEachChildName( p, pPower, pTable, pName )
             break;
