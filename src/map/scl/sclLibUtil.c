@@ -45,7 +45,7 @@ ABC_NAMESPACE_IMPL_START
   SeeAlso     []
 
 ***********************************************************************/
-static unsigned Abc_SclHashString( char * pName, int TableSize ) 
+static unsigned Abc_SclHashString( char * pName, int TableSize )
 {
     static int s_Primes[10] = { 1291, 1699, 2357, 4177, 5147, 5647, 6343, 7103, 7873, 8147 };
     unsigned i, Key = 0;
@@ -234,12 +234,516 @@ void Abc_SclShortNames( SC_Lib * p )
     sprintf( Buffer, "lib%d", SC_LibCellNum(p) );
     p->pName = Abc_UtilStrsav( Buffer );
 }
+
+int Abc_SortFloatCompare( const void * pNum1, const void * pNum2 )
+{
+    float fa = *(const float*) pNum1;
+    float fb = *(const float*) pNum2;
+    return (fa > fb) - (fa < fb);
+}
+/**Function*************************************************************
+
+  Synopsis    [Computes the median net switching power consumption of a cell.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+static float Abc_SclComputeMedianNetSwitchingPower( SC_Cell ** p )
+{
+    int i, j, k, Ind1, Ind2;
+    float CountEntries = 0;
+    float power_med = 0;
+    float med_rise = 0;
+    float med_fall = 0;
+    int sz = 0;
+    int num_entries = 0;
+
+    // ToDo (hibenj): Derive the size of the matrix for initialization
+    float* rise_val[7];
+    for ( int x = 0; x < 7; x++ )
+        rise_val[x] = (float*)calloc(7, sizeof(float));
+
+    float* fall_val[7];
+    for ( int x = 0; x < 7; x++ )
+        fall_val[x] = (float*)calloc(7, sizeof(float));
+
+    SC_Pin * PinOut;
+    SC_CellForEachPinOut( (*p), PinOut, i )
+    {
+        num_entries = PinOut->vRPowers.nSize;
+        float* med_rise_vals = (float*)calloc(num_entries, sizeof(float));
+        float* med_fall_vals = (float*)calloc(num_entries, sizeof(float));
+        SC_Powers * pRPowers;
+        SC_PinForEachRPower(PinOut, pRPowers, j)
+        {
+            // For every internal_power() entry compute the median
+            SC_Power * pRPower;
+            Vec_PtrForEachEntry( SC_Power *, &pRPowers->vPowers, pRPower, k )
+            {
+                // For the rise_power() entry compute the median
+                SC_Surface * tempRise = &(pRPower->pCellRise);
+                Vec_Flt_t * Rise_Entry;
+                Vec_PtrForEachEntry( Vec_Flt_t *, &tempRise->vData, Rise_Entry, Ind1 )
+                {
+                    float Data_val;
+                    Vec_FltForEachEntry( Rise_Entry, Data_val, Ind2 )
+                    {
+                        rise_val[Ind1][Ind2] = fabsf( Data_val );
+                    }
+                    qsort(rise_val[Ind1], 7, sizeof(float), (int (*)(const void *, const void *)) Abc_SortFloatCompare);
+                    sz = sizeof( rise_val ) / sizeof( rise_val[0] );
+                    if ( sz % 2 == 0)
+                    {
+                        rise_val[0][Ind1] =  (rise_val[Ind1][sz / 2 - 1] + rise_val[Ind1][sz / 2]) / 2;
+                    }
+                    else
+                    {
+                        rise_val[0][Ind1] =  rise_val[Ind1][0];
+                    }
+                }
+
+                qsort(rise_val[0], 7, sizeof(float), (int (*)(const void *, const void *)) Abc_SortFloatCompare);
+                sz = sizeof( rise_val ) / sizeof( rise_val[0] );
+                if ( sz % 2 == 0)
+                {
+                    med_rise_vals[j] =  (rise_val[0][sz / 2 - 1] + rise_val[Ind1][sz / 2]) / 2;
+                }
+                else
+                {
+                    med_rise_vals[j] =  rise_val[0][sz / 2];
+                }
+
+                SC_Surface * tempFall = &(pRPower->pCellFall);
+                Vec_Flt_t * Fall_Entry;
+                Vec_PtrForEachEntry( Vec_Flt_t *, &tempFall->vData, Fall_Entry, Ind1 )
+                {
+                    float Data_val;
+                    Vec_FltForEachEntry( Fall_Entry, Data_val, Ind2 )
+                    {
+                        fall_val[Ind1][Ind2] = fabsf( Data_val );
+                    }
+                    qsort(fall_val[Ind1], 7, sizeof(float), (int (*)(const void *, const void *)) Abc_SortFloatCompare);
+                    sz = sizeof( fall_val ) / sizeof( fall_val[0] );
+                    if ( sz % 2 == 0)
+                    {
+                        fall_val[0][Ind1] = (fall_val[Ind1][sz / 2 - 1] + fall_val[Ind1][sz / 2]) / 2;
+                    }
+                    else
+                    {
+                        fall_val[0][Ind1] = fall_val[Ind1][0];
+                    }
+                }
+
+                qsort(fall_val[0], 7, sizeof(float), (int (*)(const void *, const void *)) Abc_SortFloatCompare);
+                sz = sizeof( fall_val ) / sizeof( fall_val[0] );
+                if ( sz % 2 == 0)
+                {
+                    med_fall_vals[j] =  (fall_val[0][sz / 2 - 1] + fall_val[Ind1][sz / 2]) / 2;
+                }
+                else
+                {
+                    med_fall_vals[j] =  fall_val[0][sz / 2];
+                }
+
+                CountEntries++;
+            }
+            assert( CountEntries > 0 );
+        }
+
+        for ( int x = 0; x <  num_entries; x++ )
+        {
+            qsort(med_rise_vals, num_entries, sizeof(float), (int (*)(const void *, const void *)) Abc_SortFloatCompare);
+            sz = num_entries;
+            if ( sz % 2 == 0)
+            {
+                med_rise =  (med_rise_vals[sz / 2 - 1] + med_rise_vals[sz / 2]) / 2;
+            }
+            else
+            {
+                med_rise =  med_rise_vals[sz / 2];
+            }
+        }
+
+        for ( int x = 0; x <  num_entries; x++ )
+        {
+            qsort(med_fall_vals, num_entries, sizeof(float), (int (*)(const void *, const void *)) Abc_SortFloatCompare);
+            sz = num_entries;
+            if ( sz % 2 == 0)
+            {
+                med_fall =  (med_fall_vals[sz / 2 - 1] + med_fall_vals[sz / 2]) / 2;
+            }
+            else
+            {
+                med_fall =  med_fall_vals[sz / 2];
+            }
+        }
+
+        ABC_FREE( med_rise_vals );
+        ABC_FREE( med_fall_vals );
+    }
+
+    for ( int x = 0; x < 7; x++ )
+        ABC_FREE( rise_val[x] );
+
+    for ( int x = 0; x < 7; x++ )
+        ABC_FREE( fall_val[x] );
+
+    power_med = ( med_rise + med_fall ) / 2;
+
+    return power_med;
+}
+/**Function*************************************************************
+
+  Synopsis    [Computes the median cell internal power consumption of a cell.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+static float Abc_SclComputeMedianCellInternalPower( SC_Cell ** p )
+{
+    int i, j, k, Ind1, Ind2;
+    float CountEntries = 0;
+    float med_rise = 0;
+    float med_fall = 0;
+    float power_med = 0;
+    int sz = 0;
+    int num_entries = 0;
+    int matrix_size = 7;
+
+    // ToDo (hibenj): Derive the size of the matrix for initialization
+    float* rise_val;
+    rise_val = (float*)calloc(matrix_size, sizeof(float));
+
+    float* fall_val;
+    fall_val = (float*)calloc(matrix_size, sizeof(float));
+
+    SC_Pin * PinIn;
+    SC_CellForEachPinIn( (*p), PinIn, i )
+    {
+        SC_Powers * TEST_Powers = Vec_PtrEntry(&PinIn->vRPowers, 0);
+        num_entries = Vec_PtrSize(&TEST_Powers->vPowers);
+        float* med_rise_vals = (float*)calloc(num_entries, sizeof(float));
+        float* med_fall_vals = (float*)calloc(num_entries, sizeof(float));
+        SC_Powers * pRPowers;
+        SC_PinForEachRPower(PinIn, pRPowers, j)
+        {
+            // For every internal_power() entry compute the average
+            // num_entries = Vec_PtrSize(&pRPowers->vPowers);
+            SC_Power * pRPower;
+            Vec_PtrForEachEntry( SC_Power *, &pRPowers->vPowers, pRPower, k )
+            {
+                // num_entries = sizeof(pRPower->pCellRise);
+                // For the rise_power() entry compute the average
+                SC_Surface * tempRise = &(pRPower->pCellRise);
+                Vec_Flt_t * Rise_Entry;
+                Vec_PtrForEachEntry( Vec_Flt_t *, &tempRise->vData, Rise_Entry, Ind1 )
+                {
+                    float Data_val;
+                    Vec_FltForEachEntry( Rise_Entry, Data_val, Ind2 )
+                    {
+                        rise_val[Ind2] = fabsf( Data_val );
+                    }
+                }
+                qsort(rise_val, matrix_size, sizeof(float), (int (*)(const void *, const void *)) Abc_SortFloatCompare);
+                sz = matrix_size;
+                if ( sz % 2 == 0)
+                {
+                    med_rise_vals[k] =  (rise_val[sz / 2 - 1] + rise_val[sz / 2]) / 2;
+                }
+                else
+                {
+                    med_rise_vals[k] =  rise_val[sz / 2];
+                }
+
+                SC_Surface * tempFall = &(pRPower->pCellFall);
+                Vec_Flt_t * Fall_Entry;
+                Vec_PtrForEachEntry( Vec_Flt_t *, &tempFall->vData, Fall_Entry, Ind1 )
+                {
+                    float Data_val;
+                    Vec_FltForEachEntry( Fall_Entry, Data_val, Ind2 )
+                    {
+                        fall_val[Ind2] = fabsf( Data_val );
+                    }
+                }
+                qsort(fall_val, matrix_size, sizeof(float), (int (*)(const void *, const void *)) Abc_SortFloatCompare);
+                sz = matrix_size;
+                if ( sz % 2 == 0)
+                {
+                    med_fall_vals[k] =  (fall_val[sz / 2 - 1] + fall_val[sz / 2]) / 2;
+                }
+                else
+                {
+                    med_fall_vals[k] =  fall_val[sz / 2];
+                }
+                CountEntries++;
+            }
+        }
+        if( CountEntries == 0 )
+        {
+            ABC_FREE( med_rise_vals );
+            ABC_FREE( med_fall_vals );
+            ABC_FREE( rise_val );
+            ABC_FREE( fall_val );
+            return 0;
+        }
+        for ( int x = 0; x <  num_entries; x++ )
+        {
+            qsort(med_rise_vals, num_entries, sizeof(float), (int (*)(const void *, const void *)) Abc_SortFloatCompare);
+            sz = num_entries;
+            if ( sz % 2 == 0)
+            {
+                med_rise =  (med_rise_vals[sz / 2 - 1] + med_rise_vals[sz / 2]) / 2;
+            }
+            else
+            {
+                med_rise =  med_rise_vals[sz / 2];
+            }
+        }
+
+        for ( int x = 0; x <  num_entries; x++ )
+        {
+            qsort(med_fall_vals, num_entries, sizeof(float), (int (*)(const void *, const void *)) Abc_SortFloatCompare);
+            sz = num_entries;
+            if ( sz % 2 == 0)
+            {
+                med_fall =  (med_fall_vals[sz / 2 - 1] + med_fall_vals[sz / 2]) / 2;
+            }
+            else
+            {
+                med_fall =  med_fall_vals[sz / 2];
+            }
+        }
+        ABC_FREE( med_rise_vals );
+        ABC_FREE( med_fall_vals );
+    }
+
+    ABC_FREE( rise_val );
+    ABC_FREE( fall_val );
+
+    power_med = ( med_rise + med_fall ) / 2;
+
+    return power_med;
+}
+/**Function*************************************************************
+
+  Synopsis    [Computes the average net switching power consumption of a cell.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+static float Abc_SclComputeAverageNetSwitchingPower( SC_Cell ** p )
+{
+    int i, j, k, Ind1, Ind2;
+    float CountEntries = 0;
+    float rise_power_avg = 0;
+    float fall_power_avg = 0;
+    float power_avg = 0;
+
+    // ToDo (hibenj): Derive the size of the matrix for initialization
+    float* rise_avg[7];
+    for ( int x = 0; x < 7; x++ )
+        rise_avg[x] = (float*)calloc(7, sizeof(float));
+
+    float* fall_avg[7];
+    for ( int x = 0; x < 7; x++ )
+        fall_avg[x] = (float*)calloc(7, sizeof(float));
+
+    SC_Pin * PinOut;
+    SC_CellForEachPinOut( (*p), PinOut, i )
+    {
+        SC_Powers * pRPowers;
+        SC_PinForEachRPower(PinOut, pRPowers, j)
+        {
+            // For every internal_power() entry compute the average
+            SC_Power * pRPower;
+            Vec_PtrForEachEntry( SC_Power *, &pRPowers->vPowers, pRPower, k )
+            {
+                // For the rise_power() entry compute the average
+                SC_Surface * tempRise = &(pRPower->pCellRise);
+                Vec_Flt_t * Rise_Entry;
+                Vec_PtrForEachEntry( Vec_Flt_t *, &tempRise->vData, Rise_Entry, Ind1 )
+                {
+                    float Data_val;
+                    Vec_FltForEachEntry( Rise_Entry, Data_val, Ind2 )
+                    {
+                        rise_avg[Ind1][Ind2] += fabsf( Data_val );
+                    }
+                }
+
+                SC_Surface * tempFall = &(pRPower->pCellFall);
+                Vec_Flt_t * Fall_Entry;
+                Vec_PtrForEachEntry( Vec_Flt_t *, &tempFall->vData, Fall_Entry, Ind1 )
+                {
+                    float Data_val;
+                    Vec_FltForEachEntry( Fall_Entry, Data_val, Ind2 )
+                    {
+                        fall_avg[Ind1][Ind2] += fabsf( Data_val );
+                    }
+                }
+                CountEntries++;
+            }
+        }
+    }
+
+    for ( int x = 0; x < 7; x++ )
+    {
+        for ( int y = 0; y < 7; y++ )
+        {
+            rise_avg[x][y] /= CountEntries;
+            fall_avg[x][y] /= CountEntries;
+        }
+    }
+
+    for ( int x = 0; x < 7; x++ )
+    {
+        for ( int y = 0; y < 7; y++ )
+        {
+            rise_power_avg += rise_avg[x][y];
+            fall_power_avg += fall_avg[x][y];
+        }
+    }
+    rise_power_avg /= ( 7 * 7 );
+    fall_power_avg /= ( 7 * 7 );
+
+    for ( int x = 0; x < 7; x++ )
+        ABC_FREE( rise_avg[x] );
+
+    for ( int x = 0; x < 7; x++ )
+        ABC_FREE( fall_avg[x] );
+
+    power_avg = ( rise_power_avg + fall_power_avg ) / 2;
+
+    return power_avg;
+}
+/**Function*************************************************************
+
+  Synopsis    [Computes the average cell internal power consumption of a cell.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+static float Abc_SclComputeAverageCellInternalPower( SC_Cell ** p )
+{
+    int i, j, k, Ind1, Ind2;
+    float CountEntries = 0;
+    float rise_power_avg = 0;
+    float fall_power_avg = 0;
+    float power_avg = 0;
+
+    // ToDo (hibenj): Derive the size of the matrix for initialization
+    float* rise_avg;
+    rise_avg = (float*)calloc(7, sizeof(float));
+
+    float* fall_avg;
+    fall_avg = (float*)calloc(7, sizeof(float));
+
+    SC_Pin * PinIn;
+    SC_CellForEachPinIn( (*p), PinIn, i )
+    {
+        float rise_power_avg_pin = 0;
+        float fall_power_avg_pin = 0;
+        SC_Powers * pRPowers;
+        SC_PinForEachRPower(PinIn, pRPowers, j)
+        {
+            // For every internal_power() entry compute the average
+            SC_Power * pRPower;
+            Vec_PtrForEachEntry( SC_Power *, &pRPowers->vPowers, pRPower, k )
+            {
+                // For the rise_power() entry compute the average
+                SC_Surface * tempRise = &(pRPower->pCellRise);
+                Vec_Flt_t * Rise_Entry;
+                Vec_PtrForEachEntry( Vec_Flt_t *, &tempRise->vData, Rise_Entry, Ind1 )
+                {
+                    float Data_val;
+                    Vec_FltForEachEntry( Rise_Entry, Data_val, Ind2 )
+                    {
+                        rise_avg[Ind2] += fabsf( Data_val );
+                    }
+                }
+
+                SC_Surface * tempFall = &(pRPower->pCellFall);
+                Vec_Flt_t * Fall_Entry;
+                Vec_PtrForEachEntry( Vec_Flt_t *, &tempFall->vData, Fall_Entry, Ind1 )
+                {
+                    float Data_val;
+                    Vec_FltForEachEntry( Fall_Entry, Data_val, Ind2 )
+                    {
+                        fall_avg[Ind2] += fabsf( Data_val );
+                    }
+                }
+                CountEntries++;
+            }
+        }
+        if( CountEntries == 0 )
+        {
+            ABC_FREE( rise_avg );
+            ABC_FREE( fall_avg );
+            return 0;
+        }
+        for ( int x = 0; x < 7; x++ )
+        {
+            rise_avg[x] /= CountEntries;
+            fall_avg[x] /= CountEntries;
+        }
+
+        for ( int x = 0; x < 7; x++ )
+        {
+            rise_power_avg_pin += rise_avg[x];
+            fall_power_avg_pin += fall_avg[x];
+        }
+        rise_power_avg = rise_power_avg + rise_power_avg_pin / ( 7 );
+        fall_power_avg = fall_power_avg + fall_power_avg_pin / ( 7 );
+    }
+
+    ABC_FREE( rise_avg );
+
+    ABC_FREE( fall_avg );
+
+    power_avg = ( rise_power_avg + fall_power_avg ) / 2;
+
+    return power_avg;
+}
+/**Function*************************************************************
+
+  Synopsis    [Computes the average power consumption of a cell.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+static float Abc_SclComputeAveragePower( SC_Cell ** p )
+{
+    float power_avg = ( Abc_SclComputeMedianNetSwitchingPower( p ) + Abc_SclComputeMedianCellInternalPower( p ) ) / 2;
+    // power_avg = Abc_SclComputeAverageNetSwitchingPower( p );
+    // power_avg = Abc_SclComputeAverageCellInternalPower( p );
+
+    return power_avg;
+}
 /**Function*************************************************************
 
   Synopsis    [Links equal gates into rings while sorting them by area.]
 
   Description []
-               
+
   SideEffects []
 
   SeeAlso     []
@@ -251,6 +755,11 @@ static int Abc_SclCompareCells( SC_Cell ** pp1, SC_Cell ** pp2 )
         return -1;
     if ( (*pp1)->n_inputs > (*pp2)->n_inputs )
         return 1;
+    // ToDO (hibenj): use flag to use CellLinking with Power
+    /*if( Abc_SclComputeAveragePower(pp1) < Abc_SclComputeAveragePower(pp2) )
+        return -1;
+    if( Abc_SclComputeAveragePower(pp2) > Abc_SclComputeAveragePower(pp1) )
+        return 1;*/
 //    if ( (*pp1)->area < (*pp2)->area )
 //        return -1;
 //    if ( (*pp1)->area > (*pp2)->area )
