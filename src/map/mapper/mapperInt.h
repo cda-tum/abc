@@ -117,6 +117,8 @@ struct Map_ManStruct_t_
     float               fEpsilon;      // the epsilon used to compare floats
     float               AreaBase;      // the area after delay-oriented mapping
     float               AreaFinal;     // the area after delay-oriented mapping
+    float               PowerBase;     // the power after delay-oriented mapping
+    float               PowerFinal;    // the power after delay-oriented mapping
     int                 nIterations;   // How many matching passes to do
     int                 fObeyFanoutLimits;// Should mapper try to obey fanout limits or not
     float               DelayTarget;   // the required times set by the user
@@ -192,6 +194,8 @@ struct Map_SuperLibStruct_t_
     Map_Time_t          tDelayInv;     // the delay of the inverter
     float               AreaInv;       // the area of the inverter
     float               AreaBuf;       // the area of the buffer
+    float               PowerInv;      // the power of the inverter
+    float               PowerBuf;      // the power of the buffer
     Map_Super_t *       pSuperInv;     // the supergate representing the inverter
 
     // the memory manager for the internal table
@@ -393,6 +397,7 @@ extern float             Map_CutRef( Map_Cut_t * pCut, int fPhase, int fProfile 
 extern float             Map_CutDeref( Map_Cut_t * pCut, int fPhase, int fProfile );
 extern void              Map_MappingSetRefs( Map_Man_t * pMan );
 extern float             Map_MappingGetArea( Map_Man_t * pMan );
+extern float             Map_MappingGetPower( Map_Man_t * pMan );
 /*=== mapperSwitch.c =============================================================*/
 extern float             Map_SwitchCutGetDerefed( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase );
 extern float             Map_SwitchCutRef( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase );

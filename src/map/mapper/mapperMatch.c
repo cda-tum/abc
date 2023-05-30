@@ -112,10 +112,13 @@ int Map_MatchCompare( Map_Man_t * pMan, Map_Match_t * pM1, Map_Match_t * pM2, in
     else
     {
         // compare the power values
-        /*if ( pM1->PowerF < pM2->PowerF - pMan->fEpsilon )
-            return 0;
-        if ( pM1->PowerF > pM2->PowerF + pMan->fEpsilon )
-            return 1;*/
+        if ( fDoingArea == 5 )
+        {
+            if ( pM1->PowerF < pM2->PowerF - pMan->fEpsilon )
+                return 0;
+            if ( pM1->PowerF > pM2->PowerF + pMan->fEpsilon )
+                return 1;
+        }
         // compare the areas or area flows
         if ( pM1->AreaFlow < pM2->AreaFlow - pMan->fEpsilon )
             return 0;
@@ -221,6 +224,8 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
                 // skip if the cut is too large
                 if ( pMatch->AreaFlow > MatchBest.AreaFlow + p->fEpsilon )
                     continue;
+                if ( pMatch->PowerF > MatchBest.PowerF + p->fEpsilon )
+                    continue;
                 // get the arrival time
                 Map_TimeCutComputeArrival( pNode, pCut, fPhase, fWorstLimit );
                 // skip the cut if the arrival times exceed the required times
@@ -249,8 +254,16 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
             pMatch->AreaFlow = Map_CutGetAreaDerefed( pCut, fPhase );
         else if ( p->fMappingMode == 4 )
             pMatch->AreaFlow = Map_SwitchCutGetDerefed( pNode, pCut, fPhase );
-        else 
+        else if ( p->fMappingMode == 0 )
+        {
+            pMatch->PowerF = Map_CutGetPower( pCut, fPhase );
             pMatch->AreaFlow = Map_CutGetAreaFlow( pCut, fPhase );
+        }
+        else if ( p->fMappingMode == 5 )
+            pMatch->PowerF = Map_CutGetPower( pCut, fPhase );
+        else
+            pMatch->AreaFlow = Map_CutGetAreaFlow( pCut, fPhase );
+
     }
     return 1;
 }
@@ -360,7 +373,7 @@ int Map_MatchNodePhase( Map_Man_t * p, Map_Node_t * pNode, int fPhase )
             Area2 = Map_CutRef( pNode->pCutBest[fPhase], fPhase, p->fUseProfile );
         else if ( p->fMappingMode == 4 )
             Area2 = Map_SwitchCutRef( pNode, pNode->pCutBest[fPhase], fPhase );
-        else 
+        else if ( p->fMappingMode != 5 )
             assert( 0 );
 //        assert( Area2 < Area1 + p->fEpsilon );
     }
@@ -451,7 +464,7 @@ void Map_NodeTryDroppingOnePhase( Map_Man_t * p, Map_Node_t * pNode )
         return;
 
     // do not drop while recovering area flow
-    if ( p->fMappingMode == 1 )//|| p->fMappingMode == 2 )
+    if ( p->fMappingMode == 1 || p->fMappingMode == 5 )//|| p->fMappingMode == 2 )
         return;
 
     // get the pointers to the matches of the best cuts
@@ -598,7 +611,7 @@ int Map_MappingMatches( Map_Man_t * p )
     Map_Node_t * pNode;
     int i;
 
-    assert( p->fMappingMode >= 0 && p->fMappingMode <= 4 );
+    assert( p->fMappingMode >= 0 && p->fMappingMode <= 5 );
 
     // use the externally given PI arrival times
     if ( p->fMappingMode == 0 )
@@ -607,7 +620,7 @@ int Map_MappingMatches( Map_Man_t * p )
     // estimate the fanouts
     if ( p->fMappingMode == 0 )
         Map_MappingEstimateRefsInit( p );
-    else if ( p->fMappingMode == 1 )
+    else if ( p->fMappingMode == 1 || p->fMappingMode == 5 )
         Map_MappingEstimateRefs( p );
 
     // the PI cuts are matched in the cut computation package

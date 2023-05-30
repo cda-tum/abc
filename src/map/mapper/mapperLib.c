@@ -134,6 +134,8 @@ clk = Abc_Clock();
     p->tDelayInv.Worst = MAP_MAX( p->tDelayInv.Rise, p->tDelayInv.Fall );
     p->AreaInv         = Mio_LibraryReadAreaInv( p->pGenlib );
     p->AreaBuf         = Mio_LibraryReadAreaBuf( p->pGenlib );
+    p->PowerInv        = Mio_LibraryReadPowerInv( p->pGenlib );
+    p->PowerBuf        = Mio_LibraryReadPowerBuf( p->pGenlib );
 
     // assign the interver supergate
     p->pSuperInv = (Map_Super_t *)Extra_MmFixedEntryFetch( p->mmSupers );
