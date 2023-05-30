@@ -257,6 +257,7 @@ struct Map_MatchStruct_t_
     // the parameters of the match
     Map_Time_t          tArrive;       // the arrival time of this match
     float               AreaFlow;      // the area flow or area of this match
+    float               PowerF;        // the power of this match
 };
   
 // the cuts used for matching
@@ -294,6 +295,7 @@ struct Map_SuperStruct_t_
     Map_Time_t          tDelaysF[6];   // the pin-to-pin delay constraints for the rise of the output
     Map_Time_t          tDelayMax;     // the maximum delay
     float               Area;          // the area
+    float               Power;         // the power
     char *              pFormula;      // the symbolic formula
     Map_Super_t *       pNext;         // the pointer to the next super in the list
 };
@@ -386,6 +388,7 @@ extern void              Map_MappingEstimateRefs( Map_Man_t * p );
 extern float             Map_CutGetAreaFlow( Map_Cut_t * pCut, int fPhase );
 extern float             Map_CutGetAreaRefed( Map_Cut_t * pCut, int fPhase );
 extern float             Map_CutGetAreaDerefed( Map_Cut_t * pCut, int fPhase );
+extern float             Map_CutGetPower( Map_Cut_t * pCut, int fPhase );
 extern float             Map_CutRef( Map_Cut_t * pCut, int fPhase, int fProfile );
 extern float             Map_CutDeref( Map_Cut_t * pCut, int fPhase, int fProfile );
 extern void              Map_MappingSetRefs( Map_Man_t * pMan );

@@ -213,6 +213,54 @@ float Map_CutGetAreaFlow( Map_Cut_t * pCut, int fPhase )
     return aFlowRes;
 }
 
+/**function*************************************************************
+
+  synopsis    [Computes the power of the cut.]
+
+  description [Computes the power of the cut if it is implemented using
+  the best supergate with the best phase.]
+
+  sideeffects []
+
+  seealso     []
+
+***********************************************************************/
+float Map_CutGetPower( Map_Cut_t * pCut, int fPhase )
+{
+    Map_Match_t * pM = pCut->M + fPhase;
+    Map_Super_t * pSuper = pM->pSuperBest;
+    unsigned uPhaseTot = pM->uPhaseBest;
+    Map_Cut_t * pCutFanin;
+    float aFlowRes, aFlowFanin, nRefs;
+    int i, fPinPhasePos;
+
+    // start the resulting power
+    aFlowRes = pSuper->Power;
+    // iterate through the leaves
+    for ( i = 0; i < pCut->nLeaves; i++ )
+    {
+        // get the phase of this fanin
+        fPinPhasePos = ((uPhaseTot & (1 << i)) == 0);
+        // get the cut implementing this phase of the fanin
+        pCutFanin = pCut->ppLeaves[i]->pCutBest[fPinPhasePos];
+        // if the cut is not available, we have to use the opposite phase
+        if ( pCutFanin == NULL )
+        {
+            fPinPhasePos = !fPinPhasePos;
+            pCutFanin = pCut->ppLeaves[i]->pCutBest[fPinPhasePos];
+        }
+        aFlowFanin = pCutFanin->M[fPinPhasePos].PowerF; // ignores the power of the inverter
+        // get the fanout count of the cut in the given phase
+        nRefs = Map_NodeReadRefPhaseEst( pCut->ppLeaves[i], fPinPhasePos );
+        // if the node does no fanout, assume fanout count equal to 1
+        if ( nRefs == (float)0.0 )
+            nRefs = (float)1.0;
+        // add the power due to the fanin
+        aFlowRes += aFlowFanin / nRefs;
+    }
+    pM->PowerF = aFlowRes;
+    return aFlowRes;
+}
 
 /**function*************************************************************
 

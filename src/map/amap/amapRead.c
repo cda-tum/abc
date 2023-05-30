@@ -366,6 +366,8 @@ Amap_Lib_t * Amap_ParseTokens( Vec_Ptr_t * vTokens, int fVerbose )
         pToken = (char *)Vec_PtrEntry(vTokens, iPos++);
         pGate->dArea = atof( pToken );
         pToken = (char *)Vec_PtrEntry(vTokens, iPos++);
+        pGate->dPower_dyn = atof( pToken );
+        pToken = (char *)Vec_PtrEntry(vTokens, iPos++);
         pGate->pOutName = Amap_ParseStrsav( p->pMemGates, pToken ); 
         pToken = (char *)Vec_PtrEntry(vTokens, iPos++);
         iPos = Amap_CollectFormulaTokens( vTokens, pToken, iPos );

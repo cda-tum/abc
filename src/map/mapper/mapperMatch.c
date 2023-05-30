@@ -58,6 +58,7 @@ void Map_MatchClean( Map_Match_t * pMatch )
 {
     memset( pMatch, 0, sizeof(Map_Match_t) );
     pMatch->AreaFlow          = MAP_FLOAT_LARGE; // unassigned
+    // pMatch->PowerF          = MAP_FLOAT_LARGE; // unassigned
     pMatch->tArrive.Rise   = MAP_FLOAT_LARGE; // unassigned
     pMatch->tArrive.Fall   = MAP_FLOAT_LARGE; // unassigned
     pMatch->tArrive.Worst  = MAP_FLOAT_LARGE; // unassigned
@@ -85,6 +86,11 @@ int Map_MatchCompare( Map_Man_t * pMan, Map_Match_t * pM1, Map_Match_t * pM2, in
             return 0;
         if ( pM1->tArrive.Worst > pM2->tArrive.Worst + pMan->fEpsilon )
             return 1;
+        // compare the power values
+        /*if ( pM1->PowerF < pM2->PowerF - pMan->fEpsilon )
+            return 0;
+        if ( pM1->PowerF > pM2->PowerF + pMan->fEpsilon )
+            return 1;*/
         // compare the areas or area flows
         if ( pM1->AreaFlow < pM2->AreaFlow - pMan->fEpsilon )
             return 0;
@@ -105,6 +111,11 @@ int Map_MatchCompare( Map_Man_t * pMan, Map_Match_t * pM1, Map_Match_t * pM2, in
     }
     else
     {
+        // compare the power values
+        /*if ( pM1->PowerF < pM2->PowerF - pMan->fEpsilon )
+            return 0;
+        if ( pM1->PowerF > pM2->PowerF + pMan->fEpsilon )
+            return 1;*/
         // compare the areas or area flows
         if ( pM1->AreaFlow < pM2->AreaFlow - pMan->fEpsilon )
             return 0;
@@ -194,6 +205,7 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
                     continue;
                 // get the area (area flow)
                 pMatch->AreaFlow = Map_CutGetAreaFlow( pCut, fPhase );
+                pMatch->PowerF = Map_CutGetPower( pCut, fPhase );
             }
             else
             {
@@ -202,7 +214,9 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
                     pMatch->AreaFlow = Map_CutGetAreaDerefed( pCut, fPhase );
                 else if ( p->fMappingMode == 4 )
                     pMatch->AreaFlow = Map_SwitchCutGetDerefed( pNode, pCut, fPhase );
-                else 
+                else if ( p->fMappingMode == 5 )
+                    pMatch->PowerF = Map_CutGetPower( pCut, fPhase );
+                else
                     pMatch->AreaFlow = Map_CutGetAreaFlow( pCut, fPhase );
                 // skip if the cut is too large
                 if ( pMatch->AreaFlow > MatchBest.AreaFlow + p->fEpsilon )

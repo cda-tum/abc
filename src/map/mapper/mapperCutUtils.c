@@ -49,12 +49,14 @@ Map_Cut_t * Map_CutAlloc( Map_Man_t * p )
 
     pMatch = pCut->M;
     pMatch->AreaFlow       = MAP_FLOAT_LARGE; // unassigned
+    // pMatch->PowerF         = MAP_FLOAT_LARGE; // unassigned
     pMatch->tArrive.Rise   = MAP_FLOAT_LARGE; // unassigned
     pMatch->tArrive.Fall   = MAP_FLOAT_LARGE; // unassigned
     pMatch->tArrive.Worst  = MAP_FLOAT_LARGE; // unassigned
 
     pMatch = pCut->M + 1;
     pMatch->AreaFlow       = MAP_FLOAT_LARGE; // unassigned
+    // pMatch->PowerF         = MAP_FLOAT_LARGE; // unassigned
     pMatch->tArrive.Rise   = MAP_FLOAT_LARGE; // unassigned
     pMatch->tArrive.Fall   = MAP_FLOAT_LARGE; // unassigned
     pMatch->tArrive.Worst  = MAP_FLOAT_LARGE; // unassigned
