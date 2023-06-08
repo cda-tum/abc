@@ -371,6 +371,101 @@ float Map_CutRefDeref( Map_Cut_t * pCut, int fPhase, int fReference, int fUpdate
 
 /**function*************************************************************
 
+  synopsis    [References or dereferences the cut.]
+
+  description [This reference part is similar to Cudd_NodeReclaim().
+  The dereference part is similar to Cudd_RecursiveDeref().]
+
+  sideeffects []
+
+  seealso     []
+
+***********************************************************************/
+float Map_PowerCutRefDeref( Map_Cut_t * pCut, int fPhase, int fReference, int fUpdateProf )
+{
+    Map_Node_t * pNodeChild;
+    Map_Cut_t * pCutChild;
+    float aPower;
+    int i, fPhaseChild;
+//    int nRefs;
+
+    // consider the elementary variable
+    if ( pCut->nLeaves == 1 )
+        return 0;
+    // start the power of this cut
+    aPower = Map_CutGetRootPower( pCut, fPhase );
+    if ( fUpdateProf )
+    {
+        if ( fReference )
+            Mio_GateIncProfile2( pCut->M[fPhase].pSuperBest->pRoot );
+        else
+            Mio_GateDecProfile2( pCut->M[fPhase].pSuperBest->pRoot );
+    }
+    // go through the children
+    for ( i = 0; i < pCut->nLeaves; i++ )
+    {
+        pNodeChild  = pCut->ppLeaves[i];
+        fPhaseChild = Map_CutGetLeafPhase( pCut, fPhase, i );
+        // get the reference counter of the child
+
+        if ( fReference )
+        {
+            if ( pNodeChild->pCutBest[0] && pNodeChild->pCutBest[1] ) // both phases are present
+            {
+                // if this phase of the node is referenced, there is no recursive call
+                pNodeChild->nRefAct[2]++;
+                if ( pNodeChild->nRefAct[fPhaseChild]++ > 0 )
+                    continue;
+            }
+            else // only one phase is present
+            {
+                // inverter should be added if the phase
+                // (a) has no reference and (b) is implemented using other phase
+                if ( pNodeChild->nRefAct[fPhaseChild]++ == 0 && pNodeChild->pCutBest[fPhaseChild] == NULL )
+                    aPower += pNodeChild->p->pSuperLib->PowerInv;
+                // if the node is referenced, there is no recursive call
+                if ( pNodeChild->nRefAct[2]++ > 0 )
+                    continue;
+            }
+        }
+        else
+        {
+            if ( pNodeChild->pCutBest[0] && pNodeChild->pCutBest[1] ) // both phases are present
+            {
+                // if this phase of the node is referenced, there is no recursive call
+                --pNodeChild->nRefAct[2];
+                if ( --pNodeChild->nRefAct[fPhaseChild] > 0 )
+                    continue;
+            }
+            else // only one phase is present
+            {
+                // inverter should be added if the phase
+                // (a) has no reference and (b) is implemented using other phase
+                if ( --pNodeChild->nRefAct[fPhaseChild] == 0 && pNodeChild->pCutBest[fPhaseChild] == NULL )
+                    aPower += pNodeChild->p->pSuperLib->PowerInv;
+                // if the node is referenced, there is no recursive call
+                if ( --pNodeChild->nRefAct[2] > 0 )
+                    continue;
+            }
+            assert( pNodeChild->nRefAct[fPhaseChild] >= 0 );
+        }
+
+        // get the child cut
+        pCutChild = pNodeChild->pCutBest[fPhaseChild];
+        // if the child does not have this phase mapped, take the opposite phase
+        if ( pCutChild == NULL )
+        {
+            fPhaseChild = !fPhaseChild;
+            pCutChild   = pNodeChild->pCutBest[fPhaseChild];
+        }
+        // reference and compute power recursively
+        aPower += Map_PowerCutRefDeref( pCutChild, fPhaseChild, fReference, fUpdateProf );
+    }
+    return aPower;
+}
+
+/**function*************************************************************
+
   synopsis    [Computes the exact area associated with the cut.]
 
   description [Assumes that the cut is referenced.]
@@ -411,6 +506,26 @@ float Map_CutGetAreaDerefed( Map_Cut_t * pCut, int fPhase )
 
 /**function*************************************************************
 
+  synopsis    [Computes the exact area associated with the cut.]
+
+  description []
+
+  sideeffects []
+
+  seealso     []
+
+***********************************************************************/
+float Map_CutGetPowerDerefed( Map_Cut_t * pCut, int fPhase )
+{
+    float aResult, aResult2;
+    aResult2 = Map_PowerCutRefDeref( pCut, fPhase, 1, 0 ); // reference
+    aResult  = Map_PowerCutRefDeref( pCut, fPhase, 0, 0 ); // dereference
+//    assert( aResult == aResult2 );
+    return aResult;
+}
+
+/**function*************************************************************
+
   synopsis    [References the cut.]
 
   description []
@@ -441,6 +556,37 @@ float Map_CutDeref( Map_Cut_t * pCut, int fPhase, int fProfile )
     return Map_CutRefDeref( pCut, fPhase, 0, fProfile ); // dereference
 }
 
+/**function*************************************************************
+
+  synopsis    [References the cut.]
+
+  description []
+
+  sideeffects []
+
+  seealso     []
+
+***********************************************************************/
+float Map_PowerCutRef( Map_Cut_t * pCut, int fPhase, int fProfile )
+{
+    return Map_PowerCutRefDeref( pCut, fPhase, 1, fProfile ); // reference
+}
+
+/**function*************************************************************
+
+  synopsis    [Dereferences the cut.]
+
+  description []
+
+  sideeffects []
+
+  seealso     []
+
+***********************************************************************/
+float Map_PowerCutDeref( Map_Cut_t * pCut, int fPhase, int fProfile )
+{
+    return Map_PowerCutRefDeref( pCut, fPhase, 0, fProfile ); // dereference
+}
 
 /**Function*************************************************************
 

@@ -147,6 +147,7 @@ clk = Abc_Clock();
     p->pSuperInv->pFanins[0]  = p->ppSupers[0];
     p->pSuperInv->pRoot       = p->pGateInv;
     p->pSuperInv->Area        = p->AreaInv;
+    p->pSuperInv->Power       = p->PowerInv;
     p->pSuperInv->tDelayMax   = p->tDelayInv;
     p->pSuperInv->tDelaysR[0].Rise = MAP_NO_VAR;
     p->pSuperInv->tDelaysR[0].Fall = p->tDelayInv.Rise;

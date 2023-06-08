@@ -58,7 +58,7 @@ void Map_MatchClean( Map_Match_t * pMatch )
 {
     memset( pMatch, 0, sizeof(Map_Match_t) );
     pMatch->AreaFlow          = MAP_FLOAT_LARGE; // unassigned
-    // pMatch->PowerF          = MAP_FLOAT_LARGE; // unassigned
+    pMatch->PowerF          = MAP_FLOAT_LARGE; // unassigned
     pMatch->tArrive.Rise   = MAP_FLOAT_LARGE; // unassigned
     pMatch->tArrive.Fall   = MAP_FLOAT_LARGE; // unassigned
     pMatch->tArrive.Worst  = MAP_FLOAT_LARGE; // unassigned
@@ -112,18 +112,26 @@ int Map_MatchCompare( Map_Man_t * pMan, Map_Match_t * pM1, Map_Match_t * pM2, in
     else
     {
         // compare the power values
-        if ( fDoingArea == 5 )
+        if ( fDoingArea >= 5 )
         {
             if ( pM1->PowerF < pM2->PowerF - pMan->fEpsilon )
                 return 0;
             if ( pM1->PowerF > pM2->PowerF + pMan->fEpsilon )
                 return 1;
+            // compare the fanout limits
+            if ( pM1->pSuperBest->nFanLimit < pM2->pSuperBest->nFanLimit )
+                return 0;
+            if ( pM1->pSuperBest->nFanLimit > pM2->pSuperBest->nFanLimit )
+                return 1;
         }
-        // compare the areas or area flows
-        if ( pM1->AreaFlow < pM2->AreaFlow - pMan->fEpsilon )
-            return 0;
-        if ( pM1->AreaFlow > pM2->AreaFlow + pMan->fEpsilon )
-            return 1;
+        else
+        {
+            // compare the areas or area flows
+            if ( pM1->AreaFlow < pM2->AreaFlow - pMan->fEpsilon )
+                return 0;
+            if ( pM1->AreaFlow > pM2->AreaFlow + pMan->fEpsilon )
+                return 1;
+        }
 
         // make decision based on cell profile
         if ( pMan->fUseProfile && pM1->pSuperBest && pM1->pSuperBest )
@@ -219,6 +227,8 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
                     pMatch->AreaFlow = Map_SwitchCutGetDerefed( pNode, pCut, fPhase );
                 else if ( p->fMappingMode == 5 )
                     pMatch->PowerF = Map_CutGetPower( pCut, fPhase );
+                else if ( p->fMappingMode == 6 )
+                    pMatch->PowerF = Map_CutGetPowerDerefed( pCut, fPhase );
                 else
                     pMatch->AreaFlow = Map_CutGetAreaFlow( pCut, fPhase );
                 // skip if the cut is too large
@@ -231,6 +241,10 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
                 // skip the cut if the arrival times exceed the required times
                 if ( pMatch->tArrive.Worst > fWorstLimit + p->fEpsilon )
                     continue;
+                /*if ( pMatch->PowerF > 1000 )
+                    printf("Power");
+                if ( pMatch->AreaFlow > 1000 )
+                    printf("Area");*/
             }
 
             // if the cut is non-trivial, compare it
@@ -261,6 +275,8 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
         }
         else if ( p->fMappingMode == 5 )
             pMatch->PowerF = Map_CutGetPower( pCut, fPhase );
+        else if ( p->fMappingMode == 6 )
+            pMatch->PowerF = Map_SwitchCutGetDerefed( pNode, pCut, fPhase );
         else
             pMatch->AreaFlow = Map_CutGetAreaFlow( pCut, fPhase );
 
@@ -283,8 +299,8 @@ int Map_MatchNodePhase( Map_Man_t * p, Map_Node_t * pNode, int fPhase )
 {
     Map_Match_t MatchBest, * pMatch;
     Map_Cut_t * pCut, * pCutBest;
-    float Area1 = 0.0; // Suppress "might be used uninitialized
-    float Area2, fWorstLimit;
+    float Area1 = 0.0, Power1 = 0.0; // Suppress "might be used uninitialized
+    float Area2, Power2, fWorstLimit;
 
     // skip the cuts that have been unassigned during area recovery
     pCutBest = pNode->pCutBest[fPhase];
@@ -322,6 +338,15 @@ int Map_MatchNodePhase( Map_Man_t * p, Map_Node_t * pNode, int fPhase )
             pMatch->AreaFlow = Area1 = Map_SwitchCutDeref( pNode, pCutBest, fPhase );
         else
             pMatch->AreaFlow = Area1 = Map_SwitchCutGetDerefed( pNode, pCutBest, fPhase );
+    }
+    else if ( p->fMappingMode == 6 )
+    {
+        pMatch = pCutBest->M + fPhase;
+        if ( pNode->nRefAct[fPhase] > 0 ||
+             (pNode->pCutBest[!fPhase] == NULL && pNode->nRefAct[!fPhase] > 0) )
+            pMatch->PowerF = Power1 = Map_PowerCutDeref( pCutBest, fPhase, p->fUseProfile );
+        else
+            pMatch->PowerF = Power1 = Map_CutGetPowerDerefed( pCutBest, fPhase );
     }
 
     // save the old mapping
@@ -365,7 +390,7 @@ int Map_MatchNodePhase( Map_Man_t * p, Map_Node_t * pNode, int fPhase )
     pCutBest->M[fPhase]     = MatchBest;
 
     // reference the new cut if it used
-    if ( p->fMappingMode >= 2 && 
+    if ( p->fMappingMode >= 2 && p->fMappingMode != 5 &&
          (pNode->nRefAct[fPhase] > 0 || 
          (pNode->pCutBest[!fPhase] == NULL && pNode->nRefAct[!fPhase] > 0)) )
     {
@@ -373,7 +398,9 @@ int Map_MatchNodePhase( Map_Man_t * p, Map_Node_t * pNode, int fPhase )
             Area2 = Map_CutRef( pNode->pCutBest[fPhase], fPhase, p->fUseProfile );
         else if ( p->fMappingMode == 4 )
             Area2 = Map_SwitchCutRef( pNode, pNode->pCutBest[fPhase], fPhase );
-        else if ( p->fMappingMode != 5 )
+        else if ( p->fMappingMode == 6 )
+            Power2 = Map_PowerCutRef( pNode->pCutBest[fPhase], fPhase, p->fUseProfile );
+        else
             assert( 0 );
 //        assert( Area2 < Area1 + p->fEpsilon );
     }
@@ -499,7 +526,7 @@ void Map_NodeTryDroppingOnePhase( Map_Man_t * p, Map_Node_t * pNode )
         fUsePhase0 = (pNode->tRequired[1].Worst > tWorst1Using0 + 3*p->pSuperLib->tDelayInv.Worst + p->fEpsilon);
         fUsePhase1 = (pNode->tRequired[0].Worst > tWorst0Using1 + 3*p->pSuperLib->tDelayInv.Worst + p->fEpsilon);
     }
-    else if ( p->fMappingMode == 3 || p->fMappingMode == 4 )
+    else if ( p->fMappingMode == 3 || p->fMappingMode == 4 || p->fMappingMode == 6 )
     {
         fUsePhase0 = (pNode->tRequired[1].Worst > tWorst1Using0 + p->fEpsilon);
         fUsePhase1 = (pNode->tRequired[0].Worst > tWorst0Using1 + p->fEpsilon);
@@ -510,7 +537,14 @@ void Map_NodeTryDroppingOnePhase( Map_Man_t * p, Map_Node_t * pNode )
     // if replacement is possible both ways, use the one that works better
     if ( fUsePhase0 && fUsePhase1 )
     {
-        if ( pMatchBest0->AreaFlow < pMatchBest1->AreaFlow )
+        if ( p->fMappingMode == 6 )
+        {
+            if ( pMatchBest0->PowerF < pMatchBest1->PowerF )
+                fUsePhase1 = 0;
+            else
+                fUsePhase0 = 0;
+        }
+        else if ( pMatchBest0->AreaFlow < pMatchBest1->AreaFlow )
             fUsePhase1 = 0;
         else
             fUsePhase0 = 0;
@@ -521,25 +555,53 @@ void Map_NodeTryDroppingOnePhase( Map_Man_t * p, Map_Node_t * pNode )
     // set the corresponding cut to NULL
     if ( fUsePhase0 )
     {
-        // deref phase 1 cut if necessary
-        if ( p->fMappingMode >= 2 && pNode->nRefAct[1] > 0 )
-            Map_CutDeref( pNode->pCutBest[1], 1, p->fUseProfile );
-        // get rid of the cut
-        pNode->pCutBest[1] = NULL;
-        // ref phase 0 cut if necessary
-        if ( p->fMappingMode >= 2 && pNode->nRefAct[0] == 0 )
-            Map_CutRef( pNode->pCutBest[0], 0, p->fUseProfile );
+        if ( p->fMappingMode == 6 )
+        {
+            // deref phase 1 cut if necessary
+            if ( p->fMappingMode >= 2 && pNode->nRefAct[1] > 0 )
+                Map_PowerCutDeref( pNode->pCutBest[1], 1, p->fUseProfile );
+            // get rid of the cut
+            pNode->pCutBest[1] = NULL;
+            // ref phase 0 cut if necessary
+            if ( p->fMappingMode >= 2 && pNode->nRefAct[0] == 0 )
+                Map_PowerCutRef( pNode->pCutBest[0], 0, p->fUseProfile );
+        }
+        else
+        {
+            // deref phase 1 cut if necessary
+            if ( p->fMappingMode >= 2 && pNode->nRefAct[1] > 0 )
+                Map_CutDeref( pNode->pCutBest[1], 1, p->fUseProfile );
+            // get rid of the cut
+            pNode->pCutBest[1] = NULL;
+            // ref phase 0 cut if necessary
+            if ( p->fMappingMode >= 2 && pNode->nRefAct[0] == 0 )
+                Map_CutRef( pNode->pCutBest[0], 0, p->fUseProfile );
+        }
     }
     else
     {
-        // deref phase 0 cut if necessary
-        if ( p->fMappingMode >= 2 && pNode->nRefAct[0] > 0 )
-            Map_CutDeref( pNode->pCutBest[0], 0, p->fUseProfile );
-        // get rid of the cut
-        pNode->pCutBest[0] = NULL;
-        // ref phase 1 cut if necessary
-        if ( p->fMappingMode >= 2 && pNode->nRefAct[1] == 0 )
-            Map_CutRef( pNode->pCutBest[1], 1, p->fUseProfile );
+        if ( p->fMappingMode == 6 )
+        {
+            // deref phase 0 cut if necessary
+            if ( p->fMappingMode >= 2 && pNode->nRefAct[0] > 0 )
+                Map_PowerCutDeref( pNode->pCutBest[0], 0, p->fUseProfile );
+            // get rid of the cut
+            pNode->pCutBest[0] = NULL;
+            // ref phase 1 cut if necessary
+            if ( p->fMappingMode >= 2 && pNode->nRefAct[1] == 0 )
+                Map_PowerCutRef( pNode->pCutBest[1], 1, p->fUseProfile );
+        }
+        else
+        {
+            // deref phase 0 cut if necessary
+            if ( p->fMappingMode >= 2 && pNode->nRefAct[0] > 0 )
+                Map_CutDeref( pNode->pCutBest[0], 0, p->fUseProfile );
+            // get rid of the cut
+            pNode->pCutBest[0] = NULL;
+            // ref phase 1 cut if necessary
+            if ( p->fMappingMode >= 2 && pNode->nRefAct[1] == 0 )
+                Map_CutRef( pNode->pCutBest[1], 1, p->fUseProfile );
+        }
     }
 }
 
@@ -611,7 +673,7 @@ int Map_MappingMatches( Map_Man_t * p )
     Map_Node_t * pNode;
     int i;
 
-    assert( p->fMappingMode >= 0 && p->fMappingMode <= 5 );
+    assert( p->fMappingMode >= 0 && p->fMappingMode <= 6 );
 
     // use the externally given PI arrival times
     if ( p->fMappingMode == 0 )

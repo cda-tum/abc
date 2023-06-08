@@ -168,6 +168,8 @@ void Map_MappingCutsInput( Map_Man_t * p, Map_Node_t * pNode )
     pCut->uTruth = 0xAAAAAAAA; // the first variable "1010"
     pCut->M[0].AreaFlow = 0.0;
     pCut->M[1].AreaFlow = 0.0;
+    pCut->M[0].PowerF = 0.0;
+    pCut->M[1].PowerF = 0.0;
 }
 void Map_MappingCuts( Map_Man_t * p )
 {
