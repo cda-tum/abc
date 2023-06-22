@@ -32,7 +32,7 @@ ABC_NAMESPACE_IMPL_START
 ///                        DECLARATIONS                              ///
 ////////////////////////////////////////////////////////////////////////
 
-extern Map_Man_t *  Abc_NtkToMap( Abc_Ntk_t * pNtk, double DelayTarget, int fRecovery, float * pSwitching, int fVerbose );
+extern Map_Man_t *  Abc_NtkToMap( Abc_Ntk_t * pNtk, double DelayTarget, int fRecovery, float * pSwitching, int fDynPower, int fVerbose );
 extern Abc_Ntk_t *  Abc_NtkFromMap( Map_Man_t * pMan, Abc_Ntk_t * pNtk, int fUseBuffs );
 static Abc_Obj_t *  Abc_NodeFromMap_rec( Abc_Ntk_t * pNtkNew, Map_Node_t * pNodeMap, int fPhase );
 static Abc_Obj_t *  Abc_NodeFromMapPhase_rec( Abc_Ntk_t * pNtkNew, Map_Node_t * pNodeMap, int fPhase );
@@ -58,7 +58,7 @@ static Abc_Obj_t *  Abc_NodeFromMapSuperChoice_rec( Abc_Ntk_t * pNtkNew, Map_Sup
   SeeAlso     []
 
 ***********************************************************************/
-Abc_Ntk_t * Abc_NtkMap( Abc_Ntk_t * pNtk, double DelayTarget, double AreaMulti, double DelayMulti, float LogFan, float Slew, float Gain, int nGatesMin, int fRecovery, int fSwitching, int fSkipFanout, int fUseProfile, int fUseBuffs, int fVerbose )
+Abc_Ntk_t * Abc_NtkMap( Abc_Ntk_t * pNtk, double DelayTarget, double AreaMulti, double DelayMulti, float LogFan, float Slew, float Gain, int nGatesMin, int fRecovery, int fSwitching, int fDynPower, int fSkipFanout, int fUseProfile, int fUseBuffs, int fVerbose )
 {
     static int fUseMulti = 0;
     int fShowSwitching = 1;
@@ -136,7 +136,7 @@ Abc_Ntk_t * Abc_NtkMap( Abc_Ntk_t * pNtk, double DelayTarget, double AreaMulti, 
     }
 
     // perform the mapping
-    pMan = Abc_NtkToMap( pNtk, DelayTarget, fRecovery, pSwitching, fVerbose );
+    pMan = Abc_NtkToMap( pNtk, DelayTarget, fRecovery, pSwitching, fDynPower, fVerbose );
     if ( pSwitching ) Vec_IntFree( vSwitching );
     if ( pMan == NULL )
         return NULL;
@@ -258,7 +258,7 @@ Map_Time_t * Abc_NtkMapCopyCoRequiredCon( Abc_Ntk_t * pNtk )
   SeeAlso     []
 
 ***********************************************************************/
-Map_Man_t * Abc_NtkToMap( Abc_Ntk_t * pNtk, double DelayTarget, int fRecovery, float * pSwitching, int fVerbose )
+Map_Man_t * Abc_NtkToMap( Abc_Ntk_t * pNtk, double DelayTarget, int fRecovery, float * pSwitching, int fDynPower, int fVerbose )
 {
     Map_Man_t * pMan;
     Map_Node_t * pNodeMap;
@@ -273,6 +273,7 @@ Map_Man_t * Abc_NtkToMap( Abc_Ntk_t * pNtk, double DelayTarget, int fRecovery, f
     if ( pMan == NULL )
         return NULL;
     Map_ManSetAreaRecovery( pMan, fRecovery );
+    Map_ManSetPowerRecovery( pMan, fDynPower );
     Map_ManSetOutputNames( pMan, Abc_NtkCollectCioNames(pNtk, 1) );
     Map_ManSetDelayTarget( pMan, (float)DelayTarget );
 
@@ -556,7 +557,7 @@ Abc_Ntk_t * Abc_NtkSuperChoice( Abc_Ntk_t * pNtk )
         printf( "Performing mapping with choices.\n" );
 
     // perform the mapping
-    pMan = Abc_NtkToMap( pNtk, -1, 1, NULL, 0 );
+    pMan = Abc_NtkToMap( pNtk, -1, 1, NULL, 0, 0 );
     if ( pMan == NULL )
         return NULL;
     if ( !Map_Mapping( pMan ) )

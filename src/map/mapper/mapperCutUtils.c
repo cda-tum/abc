@@ -138,6 +138,23 @@ float Map_CutGetRootPower( Map_Cut_t * pCut, int fPhase )
 
 /**function*************************************************************
 
+  synopsis    [Computes the exact power associated with the cut.]
+
+  description []
+
+  sideeffects []
+
+  seealso     []
+
+***********************************************************************/
+float Map_CutGetRootSwitchPower( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase )
+{
+    assert( pCut->M[fPhase].pSuperBest );
+    return pCut->M[fPhase].pSuperBest->Power * pNode->Switching;
+}
+
+/**function*************************************************************
+
   synopsis    [Computes the exact area associated with the cut.]
 
   description []

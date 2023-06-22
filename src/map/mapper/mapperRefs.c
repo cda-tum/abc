@@ -215,9 +215,9 @@ float Map_CutGetAreaFlow( Map_Cut_t * pCut, int fPhase )
 
 /**function*************************************************************
 
-  synopsis    [Computes the power of the cut.]
+  synopsis    [Computes the power flow of the cut.]
 
-  description [Computes the power of the cut if it is implemented using
+  description [Computes the power flow of the cut if it is implemented using
   the best supergate with the best phase.]
 
   sideeffects []
@@ -225,7 +225,7 @@ float Map_CutGetAreaFlow( Map_Cut_t * pCut, int fPhase )
   seealso     []
 
 ***********************************************************************/
-float Map_CutGetPower( Map_Cut_t * pCut, int fPhase )
+float Map_CutGetPowerFlow( Map_Cut_t * pCut, int fPhase )
 {
     Map_Match_t * pM = pCut->M + fPhase;
     Map_Super_t * pSuper = pM->pSuperBest;
@@ -257,6 +257,56 @@ float Map_CutGetPower( Map_Cut_t * pCut, int fPhase )
             nRefs = (float)1.0;
         // add the power due to the fanin
         aFlowRes += aFlowFanin / nRefs;
+    }
+    pM->PowerF = aFlowRes;
+    return aFlowRes;
+}
+
+/**function*************************************************************
+
+  synopsis    [Computes the combination of switching activity and power consumption of the cut.]
+
+  description [Computes the combination of switching activity and power consumption of the cut if it is implemented
+  using the best supergate with the best phase.]
+
+  sideeffects []
+
+  seealso     []
+
+***********************************************************************/
+float Map_CutGetSwitchPower( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase )
+{
+    Map_Match_t * pM = pCut->M + fPhase;
+    Map_Super_t * pSuper = pM->pSuperBest;
+    unsigned uPhaseTot = pM->uPhaseBest;
+    Map_Cut_t * pCutFanin;
+    float aFlowRes, aFlowFanin, nRefs, aSwitching;
+    int i, fPinPhasePos;
+
+    // start the resulting power
+    aFlowRes = pSuper->Power * pNode->Switching;
+    // iterate through the leaves
+    for ( i = 0; i < pCut->nLeaves; i++ )
+    {
+        // get the phase of this fanin
+        fPinPhasePos = ((uPhaseTot & (1 << i)) == 0);
+        // get the cut implementing this phase of the fanin
+        pCutFanin = pCut->ppLeaves[i]->pCutBest[fPinPhasePos];
+        // if the cut is not available, we have to use the opposite phase
+        if ( pCutFanin == NULL )
+        {
+            fPinPhasePos = !fPinPhasePos;
+            pCutFanin = pCut->ppLeaves[i]->pCutBest[fPinPhasePos];
+        }
+        aFlowFanin = pCutFanin->M[fPinPhasePos].PowerF; // ignores the power of the inverter
+        aSwitching =  pCut->ppLeaves[i]->Switching; // switching activity stays the same after inverter
+        // get the fanout count of the cut in the given phase
+        nRefs = Map_NodeReadRefPhaseEst( pCut->ppLeaves[i], fPinPhasePos );
+        // if the node does no fanout, assume fanout count equal to 1
+        if ( nRefs == (float)0.0 )
+            nRefs = (float)1.0;
+        // add the power due to the fanin
+        aFlowRes += ( aFlowFanin * aSwitching ) / nRefs;
     }
     pM->PowerF = aFlowRes;
     return aFlowRes;
@@ -466,6 +516,102 @@ float Map_PowerCutRefDeref( Map_Cut_t * pCut, int fPhase, int fReference, int fU
 
 /**function*************************************************************
 
+  synopsis    [References or dereferences the cut.]
+
+  description [This reference part is similar to Cudd_NodeReclaim().
+  The dereference part is similar to Cudd_RecursiveDeref().]
+
+  sideeffects []
+
+  seealso     []
+
+***********************************************************************/
+float Map_SwitchPowerCutRefDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, int fReference, int fUpdateProf )
+{
+    Map_Node_t * pNodeChild;
+    Map_Cut_t * pCutChild;
+    float aPower, aSwitchActivity;
+    int i, fPhaseChild;
+//    int nRefs;
+
+    aSwitchActivity = pNode->Switching;
+    // consider the elementary variable
+    if ( pCut->nLeaves == 1 )
+        return aSwitchActivity;
+    // start the power of this cut
+    aPower = Map_CutGetRootSwitchPower( pNode, pCut, fPhase );
+    if ( fUpdateProf )
+    {
+        if ( fReference )
+            Mio_GateIncProfile2( pCut->M[fPhase].pSuperBest->pRoot );
+        else
+            Mio_GateDecProfile2( pCut->M[fPhase].pSuperBest->pRoot );
+    }
+    // go through the children
+    for ( i = 0; i < pCut->nLeaves; i++ )
+    {
+        pNodeChild  = pCut->ppLeaves[i];
+        fPhaseChild = Map_CutGetLeafPhase( pCut, fPhase, i );
+        // get the reference counter of the child
+
+        if ( fReference )
+        {
+            if ( pNodeChild->pCutBest[0] && pNodeChild->pCutBest[1] ) // both phases are present
+            {
+                // if this phase of the node is referenced, there is no recursive call
+                pNodeChild->nRefAct[2]++;
+                if ( pNodeChild->nRefAct[fPhaseChild]++ > 0 )
+                    continue;
+            }
+            else // only one phase is present
+            {
+                // inverter should be added if the phase
+                // (a) has no reference and (b) is implemented using other phase
+                if ( pNodeChild->nRefAct[fPhaseChild]++ == 0 && pNodeChild->pCutBest[fPhaseChild] == NULL )
+                    aPower += pNodeChild->p->pSuperLib->PowerInv * pNodeChild->Switching;
+                // if the node is referenced, there is no recursive call
+                if ( pNodeChild->nRefAct[2]++ > 0 )
+                    continue;
+            }
+        }
+        else
+        {
+            if ( pNodeChild->pCutBest[0] && pNodeChild->pCutBest[1] ) // both phases are present
+            {
+                // if this phase of the node is referenced, there is no recursive call
+                --pNodeChild->nRefAct[2];
+                if ( --pNodeChild->nRefAct[fPhaseChild] > 0 )
+                    continue;
+            }
+            else // only one phase is present
+            {
+                // inverter should be added if the phase
+                // (a) has no reference and (b) is implemented using other phase
+                if ( --pNodeChild->nRefAct[fPhaseChild] == 0 && pNodeChild->pCutBest[fPhaseChild] == NULL )
+                    aPower += pNodeChild->p->pSuperLib->PowerInv * pNodeChild->Switching;
+                // if the node is referenced, there is no recursive call
+                if ( --pNodeChild->nRefAct[2] > 0 )
+                    continue;
+            }
+            assert( pNodeChild->nRefAct[fPhaseChild] >= 0 );
+        }
+
+        // get the child cut
+        pCutChild = pNodeChild->pCutBest[fPhaseChild];
+        // if the child does not have this phase mapped, take the opposite phase
+        if ( pCutChild == NULL )
+        {
+            fPhaseChild = !fPhaseChild;
+            pCutChild   = pNodeChild->pCutBest[fPhaseChild];
+        }
+        // reference and compute power recursively
+        aPower += Map_SwitchPowerCutRefDeref( pNode, pCutChild, fPhaseChild, fReference, fUpdateProf );
+    }
+    return aPower;
+}
+
+/**function*************************************************************
+
   synopsis    [Computes the exact area associated with the cut.]
 
   description [Assumes that the cut is referenced.]
@@ -506,7 +652,7 @@ float Map_CutGetAreaDerefed( Map_Cut_t * pCut, int fPhase )
 
 /**function*************************************************************
 
-  synopsis    [Computes the exact area associated with the cut.]
+  synopsis    [Computes the exact power associated with the cut.]
 
   description []
 
@@ -520,6 +666,26 @@ float Map_CutGetPowerDerefed( Map_Cut_t * pCut, int fPhase )
     float aResult, aResult2;
     aResult2 = Map_PowerCutRefDeref( pCut, fPhase, 1, 0 ); // reference
     aResult  = Map_PowerCutRefDeref( pCut, fPhase, 0, 0 ); // dereference
+//    assert( aResult == aResult2 );
+    return aResult;
+}
+
+/**function*************************************************************
+
+  synopsis    [Computes the exact area associated with the cut.]
+
+  description []
+
+  sideeffects []
+
+  seealso     []
+
+***********************************************************************/
+float Map_CutGetSwitchPowerDerefed( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase )
+{
+    float aResult, aResult2;
+    aResult2 = Map_SwitchPowerCutRefDeref( pNode, pCut, fPhase, 1, 0 ); // reference
+    aResult  = Map_SwitchPowerCutRefDeref( pNode, pCut, fPhase, 0, 0 ); // dereference
 //    assert( aResult == aResult2 );
     return aResult;
 }
@@ -586,6 +752,38 @@ float Map_PowerCutRef( Map_Cut_t * pCut, int fPhase, int fProfile )
 float Map_PowerCutDeref( Map_Cut_t * pCut, int fPhase, int fProfile )
 {
     return Map_PowerCutRefDeref( pCut, fPhase, 0, fProfile ); // dereference
+}
+
+/**function*************************************************************
+
+  synopsis    [References the cut.]
+
+  description []
+
+  sideeffects []
+
+  seealso     []
+
+***********************************************************************/
+float Map_SwitchPowerCutRef( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, int fProfile )
+{
+    return Map_SwitchPowerCutRefDeref( pNode, pCut, fPhase, 1, fProfile ); // reference
+}
+
+/**function*************************************************************
+
+  synopsis    [Dereferences the cut.]
+
+  description []
+
+  sideeffects []
+
+  seealso     []
+
+***********************************************************************/
+float Map_SwitchPowerCutDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, int fProfile )
+{
+    return Map_SwitchPowerCutRefDeref( pNode, pCut, fPhase, 0, fProfile ); // dereference
 }
 
 /**Function*************************************************************
@@ -780,6 +978,65 @@ float Map_MappingGetPower( Map_Man_t * pMan )
     for ( i = 0; i < pMan->nOutputs; i++ )
         if ( Map_NodeIsVar(pMan->pOutputs[i]) && !Map_IsComplement(pMan->pOutputs[i]) )
             Power += pMan->pSuperLib->PowerBuf;
+    return Power;
+}
+
+/**Function*************************************************************
+
+  Synopsis    [Computes the power combined with switching of mapping.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+float Map_MappingGetSwitchPower( Map_Man_t * pMan )
+{
+    Map_Node_t * pNode;
+    float Power = 0.0;
+    int i;
+    if ( pMan->fUseProfile )
+        Mio_LibraryCleanProfile2( pMan->pSuperLib->pGenlib );
+    for ( i = 0; i < pMan->vMapObjs->nSize; i++ )
+    {
+        pNode = pMan->vMapObjs->pArray[i];
+        if ( pNode->nRefAct[2] == 0 )
+            continue;
+        if ( Map_NodeIsBuf(pNode) )
+            continue;
+        // at least one phase has the best cut assigned
+        assert( pNode->pCutBest[0] != NULL || pNode->pCutBest[1] != NULL );
+        // at least one phase is used in the mapping
+        assert( pNode->nRefAct[0] > 0 || pNode->nRefAct[1] > 0 );
+        // compute the array due to the supergate
+        if ( Map_NodeIsAnd(pNode) )
+        {
+            // count power of the negative phase
+            if ( pNode->pCutBest[0] && (pNode->nRefAct[0] > 0 || pNode->pCutBest[1] == NULL) )
+            {
+                Power += pNode->pCutBest[0]->M[0].pSuperBest->Power * pNode->Switching;
+                if ( pMan->fUseProfile )
+                    Mio_GateIncProfile2( pNode->pCutBest[0]->M[0].pSuperBest->pRoot );
+            }
+            // count power of the positive phase
+            if ( pNode->pCutBest[1] && (pNode->nRefAct[1] > 0 || pNode->pCutBest[0] == NULL) )
+            {
+                Power += pNode->pCutBest[1]->M[1].pSuperBest->Power * pNode->Switching;
+                if ( pMan->fUseProfile )
+                    Mio_GateIncProfile2( pNode->pCutBest[1]->M[1].pSuperBest->pRoot );
+            }
+        }
+        // count power of the interver if we need to implement one phase with another phase
+        if ( (pNode->pCutBest[0] == NULL && pNode->nRefAct[0] > 0) ||
+             (pNode->pCutBest[1] == NULL && pNode->nRefAct[1] > 0) )
+            Power += pMan->pSuperLib->PowerInv * pNode->Switching;
+    }
+    // add buffers for each CO driven by a CI
+    for ( i = 0; i < pMan->nOutputs; i++ )
+        if ( Map_NodeIsVar(pMan->pOutputs[i]) && !Map_IsComplement(pMan->pOutputs[i]) )
+            Power += pMan->pSuperLib->PowerBuf *  pMan->pInputs[i]->Switching;
     return Power;
 }
 

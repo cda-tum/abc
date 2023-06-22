@@ -62,6 +62,7 @@ float           Map_ManReadAreaFinal( Map_Man_t * p )                   { return
 float           Map_ManReadRequiredGlo( Map_Man_t * p )                 { return p->fRequiredGlo; }
 void            Map_ManSetOutputNames( Map_Man_t * p, char ** ppNames ) { p->ppOutputNames = ppNames;}
 void            Map_ManSetAreaRecovery( Map_Man_t * p, int fAreaRecovery ) { p->fAreaRecovery = fAreaRecovery;}
+void            Map_ManSetPowerRecovery( Map_Man_t * p, int fPowerRecovery ) { p->fPowerRecovery = fPowerRecovery;}
 void            Map_ManSetDelayTarget( Map_Man_t * p, float DelayTarget ) { p->DelayTarget = DelayTarget;}
 void            Map_ManSetInputArrivals( Map_Man_t * p, Map_Time_t * pArrivals )     { p->pInputArrivals = pArrivals;    }
 void            Map_ManSetOutputRequireds( Map_Man_t * p, Map_Time_t * pRequireds )  { p->pOutputRequireds = pRequireds; }

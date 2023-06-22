@@ -216,7 +216,8 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
                     continue;
                 // get the area (area flow)
                 pMatch->AreaFlow = Map_CutGetAreaFlow( pCut, fPhase );
-                pMatch->PowerF = Map_CutGetPower( pCut, fPhase );
+                pMatch->PowerF = Map_CutGetPowerFlow( pCut, fPhase );
+                // pMatch->PowerF = Map_CutGetSwitchPower( pNode, pCut, fPhase );
             }
             else
             {
@@ -226,9 +227,13 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
                 else if ( p->fMappingMode == 4 )
                     pMatch->AreaFlow = Map_SwitchCutGetDerefed( pNode, pCut, fPhase );
                 else if ( p->fMappingMode == 5 )
-                    pMatch->PowerF = Map_CutGetPower( pCut, fPhase );
+                    pMatch->PowerF = Map_CutGetPowerFlow( pCut, fPhase );
                 else if ( p->fMappingMode == 6 )
                     pMatch->PowerF = Map_CutGetPowerDerefed( pCut, fPhase );
+                else if ( p->fMappingMode == 7 )
+                    pMatch->PowerF = Map_CutGetSwitchPower( pNode, pCut, fPhase );
+                else if ( p->fMappingMode == 8 )
+                    pMatch->PowerF = Map_CutGetSwitchPowerDerefed( pNode, pCut, fPhase );
                 else
                     pMatch->AreaFlow = Map_CutGetAreaFlow( pCut, fPhase );
                 // skip if the cut is too large
@@ -270,13 +275,13 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
             pMatch->AreaFlow = Map_SwitchCutGetDerefed( pNode, pCut, fPhase );
         else if ( p->fMappingMode == 0 )
         {
-            pMatch->PowerF = Map_CutGetPower( pCut, fPhase );
+            pMatch->PowerF = Map_CutGetPowerFlow( pCut, fPhase );
             pMatch->AreaFlow = Map_CutGetAreaFlow( pCut, fPhase );
         }
         else if ( p->fMappingMode == 5 )
-            pMatch->PowerF = Map_CutGetPower( pCut, fPhase );
+            pMatch->PowerF = Map_CutGetPowerFlow( pCut, fPhase );
         else if ( p->fMappingMode == 6 )
-            pMatch->PowerF = Map_SwitchCutGetDerefed( pNode, pCut, fPhase );
+            pMatch->PowerF = Map_CutGetPowerDerefed( pCut, fPhase );
         else
             pMatch->AreaFlow = Map_CutGetAreaFlow( pCut, fPhase );
 
@@ -348,6 +353,15 @@ int Map_MatchNodePhase( Map_Man_t * p, Map_Node_t * pNode, int fPhase )
         else
             pMatch->PowerF = Power1 = Map_CutGetPowerDerefed( pCutBest, fPhase );
     }
+    else if ( p->fMappingMode == 8 )
+    {
+        pMatch = pCutBest->M + fPhase;
+        if ( pNode->nRefAct[fPhase] > 0 ||
+             (pNode->pCutBest[!fPhase] == NULL && pNode->nRefAct[!fPhase] > 0) )
+            pMatch->PowerF = Power1 = Map_SwitchPowerCutDeref( pNode, pCutBest, fPhase, p->fUseProfile );
+        else
+            pMatch->PowerF = Power1 = Map_CutGetSwitchPowerDerefed( pNode, pCutBest, fPhase );
+    }
 
     // save the old mapping
     if ( pCutBest )
@@ -390,7 +404,7 @@ int Map_MatchNodePhase( Map_Man_t * p, Map_Node_t * pNode, int fPhase )
     pCutBest->M[fPhase]     = MatchBest;
 
     // reference the new cut if it used
-    if ( p->fMappingMode >= 2 && p->fMappingMode != 5 &&
+    if ( p->fMappingMode >= 2 && p->fMappingMode != 5 && p->fMappingMode != 7 &&
          (pNode->nRefAct[fPhase] > 0 || 
          (pNode->pCutBest[!fPhase] == NULL && pNode->nRefAct[!fPhase] > 0)) )
     {
@@ -400,6 +414,8 @@ int Map_MatchNodePhase( Map_Man_t * p, Map_Node_t * pNode, int fPhase )
             Area2 = Map_SwitchCutRef( pNode, pNode->pCutBest[fPhase], fPhase );
         else if ( p->fMappingMode == 6 )
             Power2 = Map_PowerCutRef( pNode->pCutBest[fPhase], fPhase, p->fUseProfile );
+        else if ( p->fMappingMode == 8 )
+            Power2 = Map_SwitchPowerCutRef( pNode, pNode->pCutBest[fPhase], fPhase, p->fUseProfile );
         else
             assert( 0 );
 //        assert( Area2 < Area1 + p->fEpsilon );
@@ -673,7 +689,7 @@ int Map_MappingMatches( Map_Man_t * p )
     Map_Node_t * pNode;
     int i;
 
-    assert( p->fMappingMode >= 0 && p->fMappingMode <= 6 );
+    assert( p->fMappingMode >= 0 && p->fMappingMode <= 8 );
 
     // use the externally given PI arrival times
     if ( p->fMappingMode == 0 )
@@ -682,7 +698,7 @@ int Map_MappingMatches( Map_Man_t * p )
     // estimate the fanouts
     if ( p->fMappingMode == 0 )
         Map_MappingEstimateRefsInit( p );
-    else if ( p->fMappingMode == 1 || p->fMappingMode == 5 )
+    else if ( p->fMappingMode == 1 || p->fMappingMode == 5 || p->fMappingMode == 7 )
         Map_MappingEstimateRefs( p );
 
     // the PI cuts are matched in the cut computation package
