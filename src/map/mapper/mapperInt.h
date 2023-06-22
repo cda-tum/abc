@@ -111,12 +111,15 @@ struct Map_ManStruct_t_
     // mapping parameters
     int                 nVarsMax;      // the max number of variables
     int                 fAreaRecovery; // the flag to enable area recovery
+    int                 fPowerRecovery;// the flag to enable power recovery
     int                 fVerbose;      // the verbosiness flag
     int                 fMappingMode;  // set to 1 when doing area
     float               fRequiredGlo;  // the global required times
     float               fEpsilon;      // the epsilon used to compare floats
     float               AreaBase;      // the area after delay-oriented mapping
     float               AreaFinal;     // the area after delay-oriented mapping
+    float               PowerBase;     // the power after delay-oriented mapping
+    float               PowerFinal;    // the power after delay-oriented mapping
     int                 nIterations;   // How many matching passes to do
     int                 fObeyFanoutLimits;// Should mapper try to obey fanout limits or not
     float               DelayTarget;   // the required times set by the user
@@ -192,6 +195,8 @@ struct Map_SuperLibStruct_t_
     Map_Time_t          tDelayInv;     // the delay of the inverter
     float               AreaInv;       // the area of the inverter
     float               AreaBuf;       // the area of the buffer
+    float               PowerInv;      // the power of the inverter
+    float               PowerBuf;      // the power of the buffer
     Map_Super_t *       pSuperInv;     // the supergate representing the inverter
 
     // the memory manager for the internal table
@@ -257,6 +262,7 @@ struct Map_MatchStruct_t_
     // the parameters of the match
     Map_Time_t          tArrive;       // the arrival time of this match
     float               AreaFlow;      // the area flow or area of this match
+    float               PowerF;        // the power of this match
 };
   
 // the cuts used for matching
@@ -294,6 +300,7 @@ struct Map_SuperStruct_t_
     Map_Time_t          tDelaysF[6];   // the pin-to-pin delay constraints for the rise of the output
     Map_Time_t          tDelayMax;     // the maximum delay
     float               Area;          // the area
+    float               Power;         // the power
     char *              pFormula;      // the symbolic formula
     Map_Super_t *       pNext;         // the pointer to the next super in the list
 };
@@ -364,6 +371,7 @@ extern Map_Cut_t *       Map_CutAlloc( Map_Man_t * p );
 extern void              Map_CutFree( Map_Man_t * p, Map_Cut_t * pCut );
 extern void              Map_CutPrint( Map_Man_t * p, Map_Node_t * pRoot, Map_Cut_t * pCut, int fPhase );
 extern float             Map_CutGetRootArea( Map_Cut_t * pCut, int fPhase );
+extern float             Map_CutGetRootPower( Map_Cut_t * pCut, int fPhase );
 extern int               Map_CutGetLeafPhase( Map_Cut_t * pCut, int fPhase, int iLeaf );
 extern int               Map_NodeGetLeafPhase( Map_Node_t * pNode, int fPhase, int iLeaf );
 extern Map_Cut_t *       Map_CutListAppend( Map_Cut_t * pSetAll, Map_Cut_t * pSets );
@@ -386,10 +394,16 @@ extern void              Map_MappingEstimateRefs( Map_Man_t * p );
 extern float             Map_CutGetAreaFlow( Map_Cut_t * pCut, int fPhase );
 extern float             Map_CutGetAreaRefed( Map_Cut_t * pCut, int fPhase );
 extern float             Map_CutGetAreaDerefed( Map_Cut_t * pCut, int fPhase );
+extern float             Map_CutGetPowerRefed( Map_Cut_t * pCut, int fPhase );
+extern float             Map_CutGetPowerDerefed( Map_Cut_t * pCut, int fPhase );
+extern float             Map_CutGetPowerFlow( Map_Cut_t * pCut, int fPhase );
 extern float             Map_CutRef( Map_Cut_t * pCut, int fPhase, int fProfile );
 extern float             Map_CutDeref( Map_Cut_t * pCut, int fPhase, int fProfile );
+extern float             Map_PowerCutRef( Map_Cut_t * pCut, int fPhase, int fProfile );
+extern float             Map_PowerCutDeref( Map_Cut_t * pCut, int fPhase, int fProfile );
 extern void              Map_MappingSetRefs( Map_Man_t * pMan );
 extern float             Map_MappingGetArea( Map_Man_t * pMan );
+extern float             Map_MappingGetPower( Map_Man_t * pMan );
 /*=== mapperSwitch.c =============================================================*/
 extern float             Map_SwitchCutGetDerefed( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase );
 extern float             Map_SwitchCutRef( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase );

@@ -2196,7 +2196,7 @@ int Abc_CommandPrintMint( Abc_Frame_t * pAbc, int argc, char ** argv )
     }
 
     Abc_NtkForEachNode( pNtk, pObj, c )
-        printf( "ObjId %3d : SuppSize = %5d   MintCount = %32.0f\n", c, Abc_ObjFaninNum(pObj), 
+        printf( "ObjId %3d : SuppSize = %5d   MintCount = %32.0f\n", c, Abc_ObjFaninNum(pObj),
             Cudd_CountMinterm((DdManager *)pNtk->pManFunc, (DdNode *)pObj->pData, Abc_ObjFaninNum(pObj)) );
     return 0;
 
@@ -3537,7 +3537,7 @@ int Abc_CommandCollapse( Abc_Frame_t * pAbc, int argc, char ** argv )
     {
         pAbc->pCex = NULL;
         pAbc->nFrames = -1;
-        if ( Abc_NtkNodeNum(pNtkRes) == 0 ) 
+        if ( Abc_NtkNodeNum(pNtkRes) == 0 )
             pAbc->Status =  1; // UNSAT
         else
             pAbc->Status = -1; // UNDEC
@@ -7905,7 +7905,7 @@ int Abc_CommandResubCheck( Abc_Frame_t * pAbc, int argc, char ** argv )
         pFileR = argv[globalUtilOptind];
         pFileS = NULL;
     }
-    else 
+    else
     {
         Abc_Print( -1, "Incorrect number of command line arguments.\n" );
         return 1;
@@ -11703,9 +11703,9 @@ int Abc_CommandReach( Abc_Frame_t * pAbc, int argc, char ** argv )
         Abc_Print( -1, "Reachability analysis works only for AIGs (run \"strash\").\n" );
         return 1;
     }
-    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) ) 
-    { 
-        Abc_Print( 1, "The miters is already solved; skipping the command.\n" ); 
+    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) )
+    {
+        Abc_Print( 1, "The miters is already solved; skipping the command.\n" );
         return 0;
     }
     pAbc->Status  = Abc_NtkDarReach( pNtk, pPars );
@@ -17863,12 +17863,13 @@ int Abc_CommandMap( Abc_Frame_t * pAbc, int argc, char ** argv )
     int fRecovery;
     int fSweep;
     int fSwitching;
+    int fDynPower;
     int fSkipFanout;
     int fUseProfile;
     int fUseBuffs;
     int fVerbose;
     int c;
-    extern Abc_Ntk_t * Abc_NtkMap( Abc_Ntk_t * pNtk, double DelayTarget, double AreaMulti, double DelayMulti, float LogFan, float Slew, float Gain, int nGatesMin, int fRecovery, int fSwitching, int fSkipFanout, int fUseProfile, int fUseBuffs, int fVerbose );
+    extern Abc_Ntk_t * Abc_NtkMap( Abc_Ntk_t * pNtk, double DelayTarget, double AreaMulti, double DelayMulti, float LogFan, float Slew, float Gain, int nGatesMin, int fRecovery, int fSwitching, int fDynPower, int fSkipFanout, int fUseProfile, int fUseBuffs, int fVerbose );
     extern int Abc_NtkFraigSweep( Abc_Ntk_t * pNtk, int fUseInv, int fExdc, int fVerbose, int fVeryVerbose );
 
     pNtk = Abc_FrameReadNtk(pAbc);
@@ -17880,12 +17881,13 @@ int Abc_CommandMap( Abc_Frame_t * pAbc, int argc, char ** argv )
     fRecovery   = 1;
     fSweep      = 0;
     fSwitching  = 0;
+    fDynPower   = 0;
     fSkipFanout = 0;
     fUseProfile = 0;
     fUseBuffs   = 0;
     fVerbose    = 0;
     Extra_UtilGetoptReset();
-    while ( ( c = Extra_UtilGetopt( argc, argv, "DABFSGMarspfuovh" ) ) != EOF )
+    while ( ( c = Extra_UtilGetopt( argc, argv, "DABFSGMarspdfuovh" ) ) != EOF )
     {
         switch ( c )
         {
@@ -17974,6 +17976,9 @@ int Abc_CommandMap( Abc_Frame_t * pAbc, int argc, char ** argv )
         case 'p':
             fSwitching ^= 1;
             break;
+        case 'd':
+            fDynPower ^= 1;
+            break;
         case 'f':
             fSkipFanout ^= 1;
             break;
@@ -18019,7 +18024,7 @@ int Abc_CommandMap( Abc_Frame_t * pAbc, int argc, char ** argv )
         }
         Abc_Print( 0, "The network was strashed and balanced before mapping.\n" );
         // get the new network
-        pNtkRes = Abc_NtkMap( pNtk, DelayTarget, AreaMulti, DelayMulti, LogFan, Slew, Gain, nGatesMin, fRecovery, fSwitching, fSkipFanout, fUseProfile, fUseBuffs, fVerbose );
+        pNtkRes = Abc_NtkMap( pNtk, DelayTarget, AreaMulti, DelayMulti, LogFan, Slew, Gain, nGatesMin, fRecovery, fSwitching, fDynPower, fSkipFanout, fUseProfile, fUseBuffs, fVerbose );
         if ( pNtkRes == NULL )
         {
             Abc_NtkDelete( pNtk );
@@ -18031,7 +18036,7 @@ int Abc_CommandMap( Abc_Frame_t * pAbc, int argc, char ** argv )
     else
     {
         // get the new network
-        pNtkRes = Abc_NtkMap( pNtk, DelayTarget, AreaMulti, DelayMulti, LogFan, Slew, Gain, nGatesMin, fRecovery, fSwitching, fSkipFanout, fUseProfile, fUseBuffs, fVerbose );
+        pNtkRes = Abc_NtkMap( pNtk, DelayTarget, AreaMulti, DelayMulti, LogFan, Slew, Gain, nGatesMin, fRecovery, fSwitching, fDynPower, fSkipFanout, fUseProfile, fUseBuffs, fVerbose );
         if ( pNtkRes == NULL )
         {
             Abc_Print( -1, "Mapping has failed.\n" );
@@ -18071,6 +18076,7 @@ usage:
     Abc_Print( -2, "\t-r       : toggles area recovery [default = %s]\n", fRecovery? "yes": "no" );
     Abc_Print( -2, "\t-s       : toggles sweep after mapping [default = %s]\n", fSweep? "yes": "no" );
     Abc_Print( -2, "\t-p       : optimizes power by minimizing switching [default = %s]\n", fSwitching? "yes": "no" );
+    Abc_Print( -2, "\t-d       : toggles dynamic power mapping using SC library power values [default = %s]\n", fDynPower? "yes": "no" );
     Abc_Print( -2, "\t-f       : do not use large gates to map high-fanout nodes [default = %s]\n", fSkipFanout? "yes": "no" );
     Abc_Print( -2, "\t-u       : use standard-cell profile [default = %s]\n", fUseProfile? "yes": "no" );
     Abc_Print( -2, "\t-o       : toggles using buffers to decouple combinational outputs [default = %s]\n", fUseBuffs? "yes": "no" );
@@ -25007,9 +25013,9 @@ int Abc_CommandDProve( Abc_Frame_t * pAbc, int argc, char ** argv )
         Abc_Print( -1, "This command works only for structrally hashed networks. Run \"st\".\n" );
         return 0;
     }
-    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) ) 
-    { 
-        Abc_Print( 1, "The miters is already solved; skipping the command.\n" ); 
+    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) )
+    {
+        Abc_Print( 1, "The miters is already solved; skipping the command.\n" );
         return 0;
     }
 
@@ -26821,9 +26827,9 @@ int Abc_CommandBmc( Abc_Frame_t * pAbc, int argc, char ** argv )
         Abc_Print( -1, "Does not work for combinational networks.\n" );
         return 0;
     }
-    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) ) 
-    { 
-        Abc_Print( 1, "The miters is already solved; skipping the command.\n" ); 
+    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) )
+    {
+        Abc_Print( 1, "The miters is already solved; skipping the command.\n" );
         return 0;
     }
     pAbc->Status = Abc_NtkDarBmc( pNtk, 0, nFrames, nSizeMax, nNodeDelta, 0, nBTLimit, nBTLimitAll, fRewrite, fNewAlgo, 0, nCofFanLit, fVerbose, &iFrames, fUseSatoko );
@@ -27021,9 +27027,9 @@ int Abc_CommandBmc2( Abc_Frame_t * pAbc, int argc, char ** argv )
         Abc_Print( -1, "Does not work for combinational networks.\n" );
         return 0;
     }
-    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) ) 
-    { 
-        Abc_Print( 1, "The miters is already solved; skipping the command.\n" ); 
+    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) )
+    {
+        Abc_Print( 1, "The miters is already solved; skipping the command.\n" );
         return 0;
     }
     pAbc->Status = Abc_NtkDarBmc( pNtk, nStart, nFrames, nSizeMax, nNodeDelta, nTimeOut, nBTLimit, nBTLimitAll, fRewrite, fNewAlgo, fOrDecomp, 0, fVerbose, &iFrames, fUseSatoko );
@@ -27280,9 +27286,9 @@ int Abc_CommandBmc3( Abc_Frame_t * pAbc, int argc, char ** argv )
         Abc_Print( -1, "Constraints have to be folded (use \"fold\").\n" );
         return 0;
     }
-    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) ) 
-    { 
-        Abc_Print( 1, "The miters is already solved; skipping the command.\n" ); 
+    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) )
+    {
+        Abc_Print( 1, "The miters is already solved; skipping the command.\n" );
         return 0;
     }
     pPars->fUseBridge = pAbc->fBridgeMode;
@@ -27491,9 +27497,9 @@ int Abc_CommandBmcInter( Abc_Frame_t * pAbc, int argc, char ** argv )
         Abc_Print( -1, "Currently only works for structurally hashed circuits.\n" );
         return 0;
     }
-    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) ) 
-    { 
-        Abc_Print( 1, "The miters is already solved; skipping the command.\n" ); 
+    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) )
+    {
+        Abc_Print( 1, "The miters is already solved; skipping the command.\n" );
         return 0;
     }
     if ( Abc_NtkLatchNum(pNtk) == 0 )
@@ -29236,9 +29242,9 @@ int Abc_CommandPdr( Abc_Frame_t * pAbc, int argc, char ** argv )
         Abc_Print( -2, "The current network is not an AIG (run \"strash\").\n");
         return 0;
     }
-    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) ) 
-    { 
-        Abc_Print( 1, "The miters is already solved; skipping the command.\n" ); 
+    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) )
+    {
+        Abc_Print( 1, "The miters is already solved; skipping the command.\n" );
         return 0;
     }
     if ( Abc_NtkLatchNum(pNtk) == 0 )
@@ -30241,10 +30247,10 @@ usage:
   SeeAlso     []
 
 ***********************************************************************/
-static inline int Abc_NtkCompareWithBest( Abc_Ntk_t * pBest, Abc_Ntk_t * p, 
-    float * pnBestNtkArea,  float * pnBestNtkDelay, 
+static inline int Abc_NtkCompareWithBest( Abc_Ntk_t * pBest, Abc_Ntk_t * p,
+    float * pnBestNtkArea,  float * pnBestNtkDelay,
     int *   pnBestNtkNodes, int *   pnBestNtkLevels, int fArea )
-{ 
+{
     float nNtkArea   = (float)Abc_NtkGetMappedArea(p);
     float nNtkDelay  = (float)Abc_NtkDelayTrace(p, NULL, NULL, 0);
     int   nNtkNodes  = Abc_NtkNodeNum(p);
@@ -30262,10 +30268,10 @@ static inline int Abc_NtkCompareWithBest( Abc_Ntk_t * pBest, Abc_Ntk_t * p,
        )
     {
         *pnBestNtkArea   = nNtkArea;
-        *pnBestNtkDelay  = nNtkDelay; 
+        *pnBestNtkDelay  = nNtkDelay;
         *pnBestNtkNodes  = nNtkNodes;
         *pnBestNtkLevels = nNtkLevels;
-        printf( "\nUpdating the best network (Area = %10.2f  Delay = %10.2f  Nodes = %6d  Level = %6d).\n\n", 
+        printf( "\nUpdating the best network (Area = %10.2f  Delay = %10.2f  Nodes = %6d  Level = %6d).\n\n",
             nNtkArea, nNtkDelay, nNtkNodes, nNtkLevels );
         return 1;
     }
@@ -30310,8 +30316,8 @@ int Abc_CommandAbcSave( Abc_Frame_t * pAbc, int argc, char ** argv )
         Abc_Print( -1, "Network has no mapping.\n" );
         return 1;
     }
-    if ( !Abc_NtkCompareWithBest( pAbc->pNtkBest, pAbc->pNtkCur, 
-             &pAbc->nBestNtkArea,  &pAbc->nBestNtkDelay, 
+    if ( !Abc_NtkCompareWithBest( pAbc->pNtkBest, pAbc->pNtkCur,
+             &pAbc->nBestNtkArea,  &pAbc->nBestNtkDelay,
              &pAbc->nBestNtkNodes, &pAbc->nBestNtkLevels, fArea ) )
         return 0;
     // save the design as best
@@ -33086,7 +33092,7 @@ int Abc_CommandAbc9Dfs( Abc_Frame_t * pAbc, int argc, char ** argv )
         pTemp = Gia_ManDupLevelized( pAbc->pGia );
     else if ( fNormal )
         pTemp = Gia_ManDupOrderAiger( pAbc->pGia );
-    else 
+    else
         pTemp = Gia_ManDupOrderDfsReverse( pAbc->pGia, fRevFans, fRevOuts );
     Abc_FrameUpdateGia( pAbc, pTemp );
     return 0;
@@ -33324,7 +33330,7 @@ int Abc_CommandAbc9Sim2( Abc_Frame_t * pAbc, int argc, char ** argv )
     if ( nArgcNew == 2 )
     {
         char * pFileNames[2] = { pArgvNew[0], pArgvNew[1] }, * pTemp;
-        int n; 
+        int n;
         for ( n = 0; n < 2; n++ )
         {
             // fix the wrong symbol
@@ -33924,8 +33930,8 @@ int Abc_CommandAbc9ReadSim( Abc_Frame_t * pAbc, int argc, char ** argv )
         if ( Vec_WrdSize(pAbc->pGia->vSimsPo) % Gia_ManCoNum(pAbc->pGia) != 0 )
         {
             Vec_WrdFreeP( &pAbc->pGia->vSimsPo );
-            Abc_Print( -1, "File size (%d words) does not match the number of AIG inputs (%d %% %d != %d).\n", 
-                Vec_WrdSize(pAbc->pGia->vSimsPo), Vec_WrdSize(pAbc->pGia->vSimsPo), Gia_ManCiNum(pAbc->pGia), 
+            Abc_Print( -1, "File size (%d words) does not match the number of AIG inputs (%d %% %d != %d).\n",
+                Vec_WrdSize(pAbc->pGia->vSimsPo), Vec_WrdSize(pAbc->pGia->vSimsPo), Gia_ManCiNum(pAbc->pGia),
                 Vec_WrdSize(pAbc->pGia->vSimsPo) % Gia_ManCiNum(pAbc->pGia) );
             return 1;
         }
@@ -33938,8 +33944,8 @@ int Abc_CommandAbc9ReadSim( Abc_Frame_t * pAbc, int argc, char ** argv )
         if ( Vec_WrdSize(pAbc->pGia->vSimsPi) % Gia_ManCiNum(pAbc->pGia) != 0 )
         {
             Vec_WrdFreeP( &pAbc->pGia->vSimsPi );
-            Abc_Print( -1, "File size (%d words) does not match the number of AIG inputs (%d %% %d != %d).\n", 
-                Vec_WrdSize(pAbc->pGia->vSimsPi), Vec_WrdSize(pAbc->pGia->vSimsPi), Gia_ManCiNum(pAbc->pGia), 
+            Abc_Print( -1, "File size (%d words) does not match the number of AIG inputs (%d %% %d != %d).\n",
+                Vec_WrdSize(pAbc->pGia->vSimsPi), Vec_WrdSize(pAbc->pGia->vSimsPi), Gia_ManCiNum(pAbc->pGia),
                 Vec_WrdSize(pAbc->pGia->vSimsPi) % Gia_ManCiNum(pAbc->pGia) );
             return 1;
         }
@@ -36585,7 +36591,7 @@ int Abc_CommandAbc9Miter( Abc_Frame_t * pAbc, int argc, char ** argv )
             pAux = Gia_ManTransformMiter2( pAbc->pGia );
             Abc_Print( 1, "The miter (current AIG) is transformed by XORing POs of two word-level outputs.\n" );
         }
-        else if ( fTransZ ) 
+        else if ( fTransZ )
         {
             extern Gia_Man_t * Gia_ManTransformDualOutput( Gia_Man_t * p );
             pAux = Gia_ManTransformDualOutput( pAbc->pGia );
@@ -37663,7 +37669,7 @@ int Abc_CommandAbc9Fraig( Abc_Frame_t * pAbc, int argc, char ** argv )
         pTemp = Cec4_ManSimulateTest( pAbc->pGia, pPars );
     else if ( fUseAlgoY )
         pTemp = Cec5_ManSimulateTest( pAbc->pGia, pPars, fCbs, approxLim, subBatchSz, adaRecycle );
-    else 
+    else
         pTemp = Cec_ManSatSweeping( pAbc->pGia, pPars, 0 );
     if ( pAbc->pGia->pCexSeq != NULL )
     {
@@ -38506,7 +38512,7 @@ int Abc_CommandAbc9Cec( Abc_Frame_t * pAbc, int argc, char ** argv )
         }
         if ( pGias[0]->vSimsPi )
         {
-            pMiter->vSimsPi = Vec_WrdDup(pGias[0]->vSimsPi); 
+            pMiter->vSimsPi = Vec_WrdDup(pGias[0]->vSimsPi);
             pMiter->nSimWords = pGias[0]->nSimWords;
         }
         if ( fUseSim && Gia_ManCiNum(pMiter) > 40 )
@@ -43132,7 +43138,7 @@ int Abc_CommandAbc9Dch( Abc_Frame_t * pAbc, int argc, char ** argv )
     {
         pTemp = Gia_ManPerformDch( pAbc->pGia, pPars );
         Abc_FrameUpdateGia( pAbc, pTemp );
-        if ( fMinLevel ) 
+        if ( fMinLevel )
             pTemp = Gia_ManEquivReduce2( pAbc->pGia );
     }
     Abc_FrameUpdateGia( pAbc, pTemp );
@@ -49386,9 +49392,9 @@ int Abc_CommandAbc9GlaDerive( Abc_Frame_t * pAbc, int argc, char ** argv )
         return 0;
     }
 */
-    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) ) 
-    { 
-        Abc_Print( 1, "The miters is already solved; skipping the command.\n" ); 
+    if ( pAbc->fBatchMode && (pAbc->Status == 0 || pAbc->Status == 1) )
+    {
+        Abc_Print( 1, "The miters is already solved; skipping the command.\n" );
         return 0;
     }
     if ( pAbc->pGia->vGateClasses == NULL )

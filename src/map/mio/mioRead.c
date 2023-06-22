@@ -374,6 +374,9 @@ Mio_Gate_t * Mio_LibraryReadGate( char ** ppToken, int fExtendedFormat )
     pToken = strtok( NULL, " \t\r\n" );
     pGate->dArea = atof( pToken );
 
+    pToken = strtok( NULL, " \t\r\n" );
+    pGate->dPower_dyn = atof( pToken );
+
     // read the formula
 
     // first the output name

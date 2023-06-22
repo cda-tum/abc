@@ -293,10 +293,14 @@ int Map_SuperTableCompareSupergates( Map_Super_t ** ppS1, Map_Super_t ** ppS2 )
 int Map_SuperTableCompareGatesInList( Map_Super_t ** ppS1, Map_Super_t ** ppS2 )
 {
 //   if ( (*ppS1)->tDelayMax.Rise > (*ppS2)->tDelayMax.Rise )
-    if ( (*ppS1)->Area > (*ppS2)->Area )
-        return -1;
 //   if ( (*ppS1)->tDelayMax.Rise < (*ppS2)->tDelayMax.Rise )
+    /*if ( (*ppS1)->Area > (*ppS2)->Area )
+        return -1;
     if ( (*ppS1)->Area < (*ppS2)->Area )
+        return 1;*/
+    if ( (*ppS1)->Power > (*ppS2)->Power )
+        return -1;
+    if ( (*ppS1)->Power < (*ppS2)->Power )
         return 1;
     return 0;
 }

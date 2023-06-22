@@ -97,6 +97,7 @@ struct  Mio_GateStruct_t_
     // information derived from the genlib file
     char *             pName;       // the name of the gate
     double             dArea;       // the area of the gate
+    double             dPower_dyn;      // the power consumption of the gate
     char *             pForm;       // the formula describing functionality of the gate
     Mio_Pin_t *        pPins;       // the linked list of all pins (one pin if info is the same)
     char *             pOutName;    // the name of the output pin 

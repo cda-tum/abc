@@ -95,6 +95,7 @@ extern float           Map_ManReadAreaFinal( Map_Man_t * p );
 extern float           Map_ManReadRequiredGlo( Map_Man_t * p );
 extern void            Map_ManSetOutputNames( Map_Man_t * p, char ** ppNames );
 extern void            Map_ManSetAreaRecovery( Map_Man_t * p, int fAreaRecovery );
+extern void            Map_ManSetPowerRecovery( Map_Man_t * p, int fAreaRecovery );
 extern void            Map_ManSetDelayTarget( Map_Man_t * p, float DelayTarget );
 extern void            Map_ManSetInputArrivals( Map_Man_t * p, Map_Time_t * pArrivals );
 extern void            Map_ManSetOutputRequireds( Map_Man_t * p, Map_Time_t * pArrivals );

@@ -63,6 +63,8 @@ float             Mio_LibraryReadDelayAnd2Max  ( Mio_Library_t * pLib )  { retur
 float             Mio_LibraryReadDelayAigNode  ( Mio_Library_t * pLib )  { return pLib->pGateAnd2 ? Mio_LibraryReadDelayAnd2Max(pLib) : Mio_LibraryReadDelayNand2Max(pLib); } // approximate delay of the AIG node
 float             Mio_LibraryReadAreaInv       ( Mio_Library_t * pLib )  { return (float)(pLib->pGateInv?   pLib->pGateInv->dArea   : 0.0); }
 float             Mio_LibraryReadAreaBuf       ( Mio_Library_t * pLib )  { return (float)(pLib->pGateBuf?   pLib->pGateBuf->dArea   : 0.0); }
+float             Mio_LibraryReadPowerInv      ( Mio_Library_t * pLib )  { return (float)(pLib->pGateInv?   pLib->pGateInv->dPower_dyn   : 0.0); }
+float             Mio_LibraryReadPowerBuf      ( Mio_Library_t * pLib )  { return (float)(pLib->pGateBuf?   pLib->pGateBuf->dPower_dyn   : 0.0); }
 float             Mio_LibraryReadAreaNand2     ( Mio_Library_t * pLib )  { return (float)(pLib->pGateNand2? pLib->pGateNand2->dArea : 0.0); }
 void              Mio_LibrarySetName           ( Mio_Library_t * pLib, char * pName ) { ABC_FREE(pLib->pName); pLib->pName = pName;         }
 
@@ -168,6 +170,7 @@ char * Mio_LibraryReadSopByName( Mio_Library_t * pLib, char * pName )
 char *            Mio_GateReadName     ( Mio_Gate_t * pGate )            { return pGate->pName;     }
 char *            Mio_GateReadOutName  ( Mio_Gate_t * pGate )            { return pGate->pOutName;  }
 double            Mio_GateReadArea     ( Mio_Gate_t * pGate )            { return pGate->dArea;     }
+double            Mio_GateReadPower    ( Mio_Gate_t * pGate )            { return pGate->dPower_dyn;}
 char *            Mio_GateReadForm     ( Mio_Gate_t * pGate )            { return pGate->pForm;     }
 Mio_Pin_t *       Mio_GateReadPins     ( Mio_Gate_t * pGate )            { return pGate->pPins;     }
 Mio_Library_t *   Mio_GateReadLib      ( Mio_Gate_t * pGate )            { return pGate->pLib;      }
