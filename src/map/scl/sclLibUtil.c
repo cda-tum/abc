@@ -733,8 +733,7 @@ static float Abc_SclComputeAverageCellInternalPower( SC_Cell ** p )
 static float Abc_SclComputeAveragePower( SC_Cell ** p )
 {
     float power_avg = ( Abc_SclComputeAverageNetSwitchingPower( p ) + Abc_SclComputeAverageCellInternalPower( p ) ) / 2;
-    // power_avg = Abc_SclComputeAverageNetSwitchingPower( p );
-    // power_avg = Abc_SclComputeAverageCellInternalPower( p );
+    // float power_avg = ( Abc_SclComputeMedianNetSwitchingPower( p ) + Abc_SclComputeMedianCellInternalPower( p ) ) / 2;
 
     return power_avg;
 }
