@@ -149,7 +149,7 @@ int Map_CommandReadLibrary( Abc_Frame_t * pAbc, int argc, char **argv )
     }
 
     // set the new network
-    pLib = Map_SuperLibCreate( (Mio_Library_t *)Abc_FrameReadLibGen(), NULL, FileName, ExcludeFile, fAlgorithm, fVerbose );
+    pLib = Map_SuperLibCreate( (Mio_Library_t *)Abc_FrameReadLibGen(), NULL, FileName, ExcludeFile, fAlgorithm, 0, fVerbose );
     if ( pLib == NULL )
     {
         fprintf( pErr, "Reading supergate library has failed.\n" );

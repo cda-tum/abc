@@ -113,7 +113,7 @@ Abc_Ntk_t * Abc_NtkMap( Abc_Ntk_t * pNtk, double DelayTarget, double AreaMulti, 
         // compute supergate library to be used for mapping
         if ( Mio_LibraryHasProfile(pLib) )
             printf( "Abc_NtkMap(): Genlib library has profile.\n" );
-        Map_SuperLibDeriveFromGenlib( pLib, fVerbose );
+        Map_SuperLibDeriveFromGenlib( pLib, fDynPower, fVerbose );
     }
 
     // return the library to normal
@@ -549,7 +549,7 @@ Abc_Ntk_t * Abc_NtkSuperChoice( Abc_Ntk_t * pNtk )
     {
 //        printf( "A simple supergate library is derived from gate library \"%s\".\n", 
 //            Mio_LibraryReadName((Mio_Library_t *)Abc_FrameReadLibGen()) );
-        Map_SuperLibDeriveFromGenlib( (Mio_Library_t *)Abc_FrameReadLibGen(), 0 );
+        Map_SuperLibDeriveFromGenlib( (Mio_Library_t *)Abc_FrameReadLibGen(), 0, 0 );
     }
 
     // print a warning about choice nodes

@@ -562,7 +562,7 @@ int Map_LibraryReadTree( Map_SuperLib_t * pLib, Mio_Library_t * pGenlib, char * 
     if ( Status == 0 )
         return 0;
     // prepare the info about the library
-    return Map_LibraryDeriveGateInfo( pLib, tExcludeGate );
+    return Map_LibraryDeriveGateInfo( pLib, tExcludeGate, 0 );
 }
 
 
@@ -583,7 +583,7 @@ int Map_LibraryReadTree( Map_SuperLib_t * pLib, Mio_Library_t * pGenlib, char * 
   SeeAlso     []
 
 ***********************************************************************/
-int Map_LibraryDeriveGateInfo( Map_SuperLib_t * pLib, st__table * tExcludeGate )
+int Map_LibraryDeriveGateInfo( Map_SuperLib_t * pLib, st__table * tExcludeGate, int fDynPower )
 {
     Map_Super_t * pGate, * pFanin;
     Mio_Pin_t * pPin;
@@ -707,7 +707,14 @@ Rwt_Man5ExploreCount( uCanon1 < uCanon2 ? uCanon1 : uCanon2 );
 */
     }
     // sort the gates in each line
-    Map_SuperTableSortSupergatesByDelay( pLib->tTableC, pLib->nSupersAll );
+    if( fDynPower )
+    {
+        Map_SuperTableSortSupergatesByPower( pLib->tTableC, pLib->nSupersAll );
+    }
+    else
+    {
+        Map_SuperTableSortSupergatesByDelay( pLib->tTableC, pLib->nSupersAll );
+    }
 
     // let the glory be manifest
 //    Map_LibraryPrintTree( pLib );

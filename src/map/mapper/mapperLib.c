@@ -56,7 +56,7 @@ ABC_NAMESPACE_IMPL_START
   SeeAlso     []
 
 ***********************************************************************/
-Map_SuperLib_t * Map_SuperLibCreate( Mio_Library_t * pGenlib, Vec_Str_t * vStr, char * pFileName, char * pExcludeFile, int fAlgorithm, int fVerbose )
+Map_SuperLib_t * Map_SuperLibCreate( Mio_Library_t * pGenlib, Vec_Str_t * vStr, char * pFileName, char * pExcludeFile, int fAlgorithm, int fDynPower, int fVerbose )
 {
     Map_SuperLib_t * p;
     abctime clk;
@@ -87,7 +87,7 @@ clk = Abc_Clock();
             return NULL;
         }
         // prepare the info about the library
-        Status = Map_LibraryDeriveGateInfo( p, NULL );
+        Status = Map_LibraryDeriveGateInfo( p, NULL, fDynPower );
         if ( Status == 0 )
         {
             Map_SuperLibFree( p );
@@ -200,7 +200,7 @@ void Map_SuperLibFree( Map_SuperLib_t * p )
   SeeAlso     []
 
 ***********************************************************************/
-int Map_SuperLibDeriveFromGenlib( Mio_Library_t * pLib, int fVerbose )
+int Map_SuperLibDeriveFromGenlib( Mio_Library_t * pLib, int fDynPower, int fVerbose )
 {
     Map_SuperLib_t * pLibSuper;
     Vec_Str_t * vStr;
@@ -215,7 +215,7 @@ int Map_SuperLibDeriveFromGenlib( Mio_Library_t * pLib, int fVerbose )
 
     // create supergate library
     pFileName = Extra_FileNameGenericAppend( Mio_LibraryReadName(pLib), ".super" );
-    pLibSuper = Map_SuperLibCreate( pLib, vStr, pFileName, NULL, 1, 0 );
+    pLibSuper = Map_SuperLibCreate( pLib, vStr, pFileName, NULL, 1, fDynPower, 0 );
     Vec_StrFree( vStr );
 
     // replace the library

@@ -294,10 +294,28 @@ int Map_SuperTableCompareGatesInList( Map_Super_t ** ppS1, Map_Super_t ** ppS2 )
 {
 //   if ( (*ppS1)->tDelayMax.Rise > (*ppS2)->tDelayMax.Rise )
 //   if ( (*ppS1)->tDelayMax.Rise < (*ppS2)->tDelayMax.Rise )
-    /*if ( (*ppS1)->Area > (*ppS2)->Area )
+    if ( (*ppS1)->Area > (*ppS2)->Area )
         return -1;
     if ( (*ppS1)->Area < (*ppS2)->Area )
-        return 1;*/
+        return 1;
+    return 0;
+}
+
+/**Function*************************************************************
+
+  Synopsis    [Compares the supergates by the number of times they are used.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+int Map_SuperTableCompareGatesInListPower( Map_Super_t ** ppS1, Map_Super_t ** ppS2 )
+{
+//   if ( (*ppS1)->tDelayMax.Rise > (*ppS2)->tDelayMax.Rise )
+//   if ( (*ppS1)->tDelayMax.Rise < (*ppS2)->tDelayMax.Rise )
     if ( (*ppS1)->Power > (*ppS2)->Power )
         return -1;
     if ( (*ppS1)->Power < (*ppS2)->Power )
@@ -390,6 +408,56 @@ void Map_SuperTableSortSupergatesByDelay( Map_HashTable_t * p, int nSupersMax )
             qsort( (void *)ppSupers, (size_t)nSupers, sizeof(Map_Super_t *), 
                     (int (*)(const void *, const void *)) Map_SuperTableCompareGatesInList );
             assert( Map_SuperTableCompareGatesInList( ppSupers, ppSupers + nSupers - 1 ) <= 0 );
+            // link them in the reverse order
+            for ( k = 0; k < nSupers; k++ )
+            {
+                ppSupers[k]->pNext = pEnt->pGates;
+                pEnt->pGates = ppSupers[k];
+            }
+            // save the number of supergates in the list
+            pEnt->pGates->nSupers = nSupers;
+        }
+    ABC_FREE( ppSupers );
+}
+
+/**Function*************************************************************
+
+  Synopsis    [Sorts supergates by max delay for each truth table.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+void Map_SuperTableSortSupergatesByPower( Map_HashTable_t * p, int nSupersMax )
+{
+    Map_HashEntry_t * pEnt;
+    Map_Super_t ** ppSupers;
+    Map_Super_t * pSuper;
+    int nSupers, i, k;
+
+    ppSupers = ABC_ALLOC( Map_Super_t *, nSupersMax );
+    for ( i = 0; i < p->nBins; i++ )
+        for ( pEnt = p->pBins[i]; pEnt; pEnt = pEnt->pNext )
+        {
+            // collect the gates in this entry
+            nSupers = 0;
+            for ( pSuper = pEnt->pGates; pSuper; pSuper = pSuper->pNext )
+            {
+                // skip supergates, whose root is the AND gate
+//                if ( strcmp( Mio_GateReadName(pSuper->pRoot), "and" ) == 0 )
+//                    continue;
+                ppSupers[nSupers++] = pSuper;
+            }
+            pEnt->pGates = NULL;
+            if ( nSupers == 0 )
+                continue;
+            // sort the gates by delay
+            qsort( (void *)ppSupers, (size_t)nSupers, sizeof(Map_Super_t *),
+                   (int (*)(const void *, const void *)) Map_SuperTableCompareGatesInListPower );
+            assert( Map_SuperTableCompareGatesInListPower( ppSupers, ppSupers + nSupers - 1 ) <= 0 );
             // link them in the reverse order
             for ( k = 0; k < nSupers; k++ )
             {

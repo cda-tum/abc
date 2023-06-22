@@ -49,13 +49,19 @@ ABC_NAMESPACE_IMPL_START
 ***********************************************************************/
 int Map_Mapping( Map_Man_t * p )
 {
-    p->fSwitching = 1;
-    int fShowSwitching         = 0;
-    int fUseAreaFlow           = 0;
-    int fUseExactArea          = !p->fSwitching; // !p->fSwitching;
-    int fUseExactAreaWithPhase = !p->fSwitching; // !p->fSwitching;
-    int fUsePowerFlow          = 1;
-    p->fSwitching = 0;
+    if (p->fPowerRecovery) {
+        p->fSwitching = 1;
+    }
+    int fShowSwitching = 0;
+    int fUseAreaFlow = 1;
+    int fUseExactArea = !p->fSwitching;
+    int fUseExactAreaWithPhase = !p->fSwitching;
+    int fUsePowerFlow = 0;
+    if (p->fPowerRecovery) {
+        fUseAreaFlow = 0;
+        fUsePowerFlow = 1;
+        p->fSwitching = 0;
+    }
     abctime clk;
 
     //////////////////////////////////////////////////////////////////////
