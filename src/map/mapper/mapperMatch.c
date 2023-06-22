@@ -148,10 +148,10 @@ int Map_MatchCompare( Map_Man_t * pMan, Map_Match_t * pM1, Map_Match_t * pM2, in
         }
 
         // compare the arrival times
-        if ( pM1->tArrive.Worst < pM2->tArrive.Worst - pMan->fEpsilon )
+        /*if ( pM1->tArrive.Worst < pM2->tArrive.Worst - pMan->fEpsilon )
             return 0;
         if ( pM1->tArrive.Worst > pM2->tArrive.Worst + pMan->fEpsilon )
-            return 1;
+            return 1;*/
         // compare the fanout limits
         if ( pM1->pSuperBest->nFanLimit > pM2->pSuperBest->nFanLimit )
             return 0;
@@ -257,8 +257,8 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
             {
                 MatchBest = *pMatch;
                 // if we are mapping for delay, the worst-case limit should be reduced
-                if ( p->fMappingMode == 0 )
-                    fWorstLimit = MatchBest.tArrive.Worst;
+                /*if ( p->fMappingMode == 0 )
+                    fWorstLimit = MatchBest.tArrive.Worst;*/
             }
         }
     }
@@ -370,7 +370,8 @@ int Map_MatchNodePhase( Map_Man_t * p, Map_Node_t * pNode, int fPhase )
         Map_MatchClean( &MatchBest );
  
     // select the new best cut
-    fWorstLimit = pNode->tRequired[fPhase].Worst;
+    fWorstLimit = MAP_FLOAT_LARGE; // pNode->tRequired[fPhase].Worst
+    // fWorstLimit = pNode->tRequired[fPhase].Worst;
     for ( pCut = pNode->pCuts->pNext; pCut; pCut = pCut->pNext )
     {
         // limit gate sizes based on fanout count
@@ -518,9 +519,11 @@ void Map_NodeTryDroppingOnePhase( Map_Man_t * p, Map_Node_t * pNode )
     // implemented using the other phase with inverter added
     tWorst0Using1 = Map_TimeMatchWithInverter( p, pMatchBest1 );
     tWorst1Using0 = Map_TimeMatchWithInverter( p, pMatchBest0 );
+    /*tWorst0Using1 = 0;
+    tWorst1Using0 = 0;*/
 
     // consider the case of mapping for delay
-    if ( p->fMappingMode == 0 && p->DelayTarget < ABC_INFINITY )
+    /*if ( p->fMappingMode == 0 && p->DelayTarget < ABC_INFINITY )
     { 
         // if the arrival time of a phase is larger than the arrival time 
         // of the opposite phase plus the inverter, drop this phase
@@ -548,7 +551,7 @@ void Map_NodeTryDroppingOnePhase( Map_Man_t * p, Map_Node_t * pNode )
         fUsePhase1 = (pNode->tRequired[0].Worst > tWorst0Using1 + p->fEpsilon);
     }
     if ( !fUsePhase0 && !fUsePhase1 )
-        return;
+        return;*/
 
     // if replacement is possible both ways, use the one that works better
     if ( fUsePhase0 && fUsePhase1 )
