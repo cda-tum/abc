@@ -155,7 +155,7 @@ struct Amap_Gat_t_
     char *             pName;           // the name of the gate
     char *             pOutName;        // name of the output
     double             dArea;           // the area of the gate
-    double             dPower_dyn;      // the area of the gate
+    double             dPower_dyn;      // the power of the gate
     char *             pForm;           // the formula describing functionality
     unsigned *         pFunc;           // truth table
     unsigned           Id     :   23;   // unique number of the gate
