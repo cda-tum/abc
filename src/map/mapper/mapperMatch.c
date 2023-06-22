@@ -554,20 +554,22 @@ void Map_NodeTryDroppingOnePhase( Map_Man_t * p, Map_Node_t * pNode )
         return;*/
 
     // if replacement is possible both ways, use the one that works better
-    if ( fUsePhase0 && fUsePhase1 )
+
+    fUsePhase0 = 1;
+    fUsePhase1 = 1;
+
+    if ( p->fMappingMode == 6 )
     {
-        if ( p->fMappingMode == 6 )
-        {
-            if ( pMatchBest0->PowerF < pMatchBest1->PowerF )
-                fUsePhase1 = 0;
-            else
-                fUsePhase0 = 0;
-        }
-        else if ( pMatchBest0->AreaFlow < pMatchBest1->AreaFlow )
+        if ( pMatchBest0->PowerF < pMatchBest1->PowerF )
             fUsePhase1 = 0;
         else
             fUsePhase0 = 0;
     }
+    else if ( pMatchBest0->AreaFlow < pMatchBest1->AreaFlow )
+        fUsePhase1 = 0;
+    else
+        fUsePhase0 = 0;
+
     // only one phase should be used
     assert( fUsePhase0 ^ fUsePhase1 );
 

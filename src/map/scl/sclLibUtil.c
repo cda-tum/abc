@@ -755,10 +755,10 @@ static int Abc_SclCompareCells( SC_Cell ** pp1, SC_Cell ** pp2 )
     if ( (*pp1)->n_inputs > (*pp2)->n_inputs )
         return 1;
     // ToDO (hibenj): use flag to use CellLinking with Power
-    /*if( Abc_SclComputeAveragePower(pp1) < Abc_SclComputeAveragePower(pp2) )
+    if( Abc_SclComputeAveragePower(pp1) < Abc_SclComputeAveragePower(pp2) )
         return -1;
     if( Abc_SclComputeAveragePower(pp2) > Abc_SclComputeAveragePower(pp1) )
-        return 1;*/
+        return 1;
 //    if ( (*pp1)->area < (*pp2)->area )
 //        return -1;
 //    if ( (*pp1)->area > (*pp2)->area )
