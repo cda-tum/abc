@@ -557,7 +557,7 @@ Abc_Ntk_t * Abc_NtkSuperChoice( Abc_Ntk_t * pNtk )
         printf( "Performing mapping with choices.\n" );
 
     // perform the mapping
-    pMan = Abc_NtkToMap( pNtk, -1, 1, NULL, 0 );
+    pMan = Abc_NtkToMap( pNtk, -1, 1, NULL, 0, 0 );
     if ( pMan == NULL )
         return NULL;
     if ( !Map_Mapping( pMan ) )
