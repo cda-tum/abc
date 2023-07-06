@@ -658,6 +658,7 @@ static float Abc_SclComputeAverageCellInternalPower( SC_Cell ** p )
     {
         float rise_power_avg_pin = 0;
         float fall_power_avg_pin = 0;
+        CountEntries = 0;
         SC_Powers * pRPowers;
         SC_PinForEachRPower(PinIn, pRPowers, j)
         {
@@ -706,10 +707,15 @@ static float Abc_SclComputeAverageCellInternalPower( SC_Cell ** p )
         {
             rise_power_avg_pin += rise_avg[x];
             fall_power_avg_pin += fall_avg[x];
+            rise_avg[x] = 0;
+            fall_avg[x] = 0;
         }
-        rise_power_avg = rise_power_avg + rise_power_avg_pin / ( 7 );
-        fall_power_avg = fall_power_avg + fall_power_avg_pin / ( 7 );
+        rise_power_avg = rise_power_avg + (rise_power_avg_pin / 7 );
+        fall_power_avg = fall_power_avg + (fall_power_avg_pin / 7 );
     }
+    /*float n_pins = (float)(*p)->n_inputs;
+    rise_power_avg = rise_power_avg / n_pins;
+    fall_power_avg = fall_power_avg / n_pins;*/
 
     ABC_FREE( rise_avg );
 
@@ -732,7 +738,16 @@ static float Abc_SclComputeAverageCellInternalPower( SC_Cell ** p )
 ***********************************************************************/
 static float Abc_SclComputeAveragePower( SC_Cell ** p )
 {
-    float power_avg = ( Abc_SclComputeAverageNetSwitchingPower( p ) + Abc_SclComputeAverageCellInternalPower( p ) ) / 2;
+    float a = Abc_SclComputeAverageNetSwitchingPower( p );
+    float b = Abc_SclComputeAverageCellInternalPower( p );
+    assert( a > 0 && b >=0 );
+    /*float div = 2;
+    if ( b == 0 )
+    {
+        --div;
+    }*/
+    float power_avg = ( a + b );
+
     // float power_avg = ( Abc_SclComputeMedianNetSwitchingPower( p ) + Abc_SclComputeMedianCellInternalPower( p ) ) / 2;
 
     return power_avg;
@@ -1020,6 +1035,67 @@ int Abc_SclComputeParametersPin( SC_Lib * p, SC_Cell * pCell, int iPin, float Sl
     *pPD = ArrOut0.rise;
     return 1;
 }
+
+/**Function*************************************************************
+
+  Synopsis    [Compute delay parameters of pin/cell/class.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+int Abc_SclComputePowerParametersPin( SC_Lib * p, SC_Cell * pCell, int iPin, float Slew, float * pLD, float * pPD )
+{
+    SC_Pair Load0, Load1, Load2;
+    SC_Pair ArrIn  = { 0.0, 0.0 };
+    SC_Pair SlewIn = { Slew, Slew };
+    SC_Pair ArrOut0 = { 0.0, 0.0 };
+    SC_Pair ArrOut1 = { 0.0, 0.0 };
+    SC_Pair ArrOut2 = { 0.0, 0.0 };
+    float Out0 = 0, Out1 = 0, Out2 = 0;
+    SC_Timing * pTime = Scl_CellPinTime( pCell, iPin );
+    int pn, n;
+    Scl_CellPinPowerEntries( pCell, iPin, &pn, &n );
+    SC_Power * pPower;
+
+    for ( int it = 0; it < n; ++it )
+    {
+        pPower = Scl_CellPinPower( pCell, iPin, pn, it );
+        /*SC_Surface * ts = &pPower->pCellRise;
+        float* vTemp = (Vec_Flt_t *)Vec_PtrEntry(&ts->vData, 0);
+        float ts_flt = vTemp[0];*/
+        Vec_Flt_t * vIndex = pPower ? &pPower->pCellRise.vIndex1 : NULL; // capacitance
+        if ( vIndex == NULL )
+            return 0;
+        // handle constant table
+        if ( Vec_FltSize(vIndex) == 1 )
+        {
+            *pLD = 0;
+            *pPD = Vec_FltEntry( (Vec_Flt_t *)Vec_PtrEntry(&pPower->pCellRise.vData, 0), 0 );
+            return 1;
+        }
+        // get load points
+        Load0.rise = Load0.fall = 0.0;
+        Load1.rise = Load1.fall = Vec_FltEntry( vIndex, 0 );
+        Load2.rise = Load2.fall = Vec_FltEntry( vIndex, Vec_FltSize(vIndex) - 2 );
+        // compute power
+        Scl_LibPinPwrIn( pPower, pTime, &ArrIn, &SlewIn, &Load0, &ArrOut0 );
+        Scl_LibPinPwrIn( pPower, pTime, &ArrIn, &SlewIn, &Load1, &ArrOut1 );
+        Scl_LibPinPwrIn( pPower, pTime, &ArrIn, &SlewIn, &Load2, &ArrOut2 );
+        Out0 = Out0 + 0.5 * ArrOut0.rise + 0.5 * ArrOut0.fall;
+        Out1 = Out1 + 0.5 * ArrOut1.rise + 0.5 * ArrOut1.fall;
+        Out2 = Out2 + 0.5 * ArrOut2.rise + 0.5 * ArrOut2.fall;
+    }
+    // get tangent
+    *pLD = (Out2 - Out1) / (n*(Load2.rise - Load1.rise) / SC_CellPinCap(pCell, iPin));
+    // get constant
+    *pPD = Out0/n;
+
+    return 1;
+}
 int Abc_SclComputeParametersCell( SC_Lib * p, SC_Cell * pCell, float Slew, float * pLD, float * pPD )
 {
     SC_Pin * pPin;
@@ -1081,16 +1157,18 @@ float Abc_SclComputeDelayClassPin( SC_Lib * p, SC_Cell * pRepr, int iPin, float 
     {
         if ( pCell->fSkip ) 
             continue;
-//        if ( pRepr == pCell ) // skip the first gate
-//            continue;
+        /*if ( pRepr != pCell ) // skip the first gate
+            continue;*/
         Delay += Abc_SclComputeDelayCellPin( p, pCell, iPin, Slew, Gain );
         Count++;
     }
     return Delay / Abc_MaxInt(1, Count);
 }
-float Abc_SclComputePowerCellPin( SC_Cell * pCell )
+float Abc_SclComputePowerCellPin( SC_Lib * p, SC_Cell * pCell, int iPin, float Slew, float Gain )
 {
-    return Abc_SclComputeAveragePower( &pCell );
+    float LD = 0, PD = 0;
+    Abc_SclComputePowerParametersPin( p, pCell, iPin, Slew, &LD, &PD );
+    return 0.01 * LD * Gain + PD;
 }
 float Abc_SclComputePowerClassPin( SC_Cell * pRepr )
 {
@@ -1101,12 +1179,28 @@ float Abc_SclComputePowerClassPin( SC_Cell * pRepr )
     {
         if ( pCell->fSkip )
             continue;
-//        if ( pRepr == pCell ) // skip the first gate
-//            continue;
-        Power += Abc_SclComputePowerCellPin( pCell );
+        if ( pRepr != pCell ) // skip the first gate
+            continue;
+        Power += Abc_SclComputeAveragePower( &pCell );
         Count++;
     }
-    return Power / ( Abc_MaxInt(1, Count) * 0.0001 );
+    return Power / ( Abc_MaxInt(1, Count) );
+}
+float Abc_SclComputePowerClassPinI( SC_Lib * p, SC_Cell * pRepr, int iPin, float Slew, float Gain )
+{
+    SC_Cell * pCell;
+    float Power = 0;
+    int i, Count = 0;
+    SC_RingForEachCell( pRepr, pCell, i )
+    {
+        if ( pCell->fSkip )
+            continue;
+//        if ( pRepr == pCell ) // skip the first gate
+//            continue;
+        Power += Abc_SclComputePowerCellPin( p, pCell, iPin, Slew, Gain );
+        Count++;
+    }
+    return Power / Abc_MaxInt(1, Count);
 }
 float Abc_SclComputeAreaClass( SC_Cell * pRepr )
 {
@@ -1282,7 +1376,9 @@ void Abc_SclLibNormalize( SC_Lib * p )
     SC_Pin * pPin;
     SC_Timings * pTimings;
     SC_Timing * pTiming;
-    int i, k, m, n;
+    SC_Powers * pPowers;
+    SC_Power * pPower;
+    int i, k, m, n, q, r;
     float Time = 1.0 * pow(10.0, 12 - p->unit_time);
     float Load = p->unit_cap_fst * pow(10.0, 15 - p->unit_cap_snd);
     if ( Time == 1 && Load == 1 )
@@ -1308,6 +1404,23 @@ void Abc_SclLibNormalize( SC_Lib * p )
             Abc_SclLibNormalizeSurface( &pTiming->pCellFall, Time, Load );
             Abc_SclLibNormalizeSurface( &pTiming->pRiseTrans, Time, Load );
             Abc_SclLibNormalizeSurface( &pTiming->pFallTrans, Time, Load );
+        }
+        SC_PinForEachRPower( pPin, pPowers, q )
+        if ( k < pCell->n_inputs )
+        {
+            Vec_PtrForEachEntry( SC_Power *, &pPowers->vPowers, pPower, r )
+            {
+                Abc_SclLibNormalizeSurface( &pPower->pCellRise, Time, Load );
+                Abc_SclLibNormalizeSurface( &pPower->pCellFall, Time, Load );
+            }
+        }
+        else
+        {
+            Vec_PtrForEachEntry( SC_Power *, &pPowers->vPowers, pPower, r )
+            {
+                Abc_SclLibNormalizeSurface( &pPower->pCellRise, Time, Load );
+                Abc_SclLibNormalizeSurface( &pPower->pCellFall, Time, Load );
+            }
         }
     }
 }
@@ -1349,7 +1462,7 @@ Vec_Str_t * Abc_SclProduceGenlibStrSimple( SC_Lib * p )
             sprintf( Buffer, "%7.2f", pCell->area );
             Vec_StrPrintStr( vStr, Buffer );
             Vec_StrPrintStr( vStr, " " );
-            float SwitchingPower = 1;
+            float SwitchingPower = Abc_SclComputeAveragePower ( &pCell );
             sprintf( Buffer, "%7.2f \n", SwitchingPower );
             Vec_StrPrintStr( vStr, Buffer );
             Vec_StrPrintStr( vStr, " " );
@@ -1452,6 +1565,7 @@ Vec_Str_t * Abc_SclProduceGenlibStr( SC_Lib * p, float Slew, float Gain, int nGa
             Vec_StrPrintStr( vStr, Buffer );
             sprintf( Buffer, " UNKNOWN  1  999  %7.2f  0.00  %7.2f  0.00\n", Delay, Delay );
             Vec_StrPrintStr( vStr, Buffer );
+            //float Power = Abc_SclComputePowerClassPinI( p, pRepr, k, Slew, Gain );
         }
         Count++;
     }

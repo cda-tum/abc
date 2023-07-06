@@ -572,6 +572,19 @@ static inline float Scl_LibLookup( SC_Surface * p, float slew, float load )
 
     return p0 + sfrac * (p1 - p0);      // <<== multiply result with K factor here 
 }
+static inline void Scl_LibPinPwrIn( SC_Power * pPower, SC_Timing * pTime, SC_Pair * pArrIn, SC_Pair * pSlewIn, SC_Pair * pLoad, SC_Pair * pArrOut )
+{
+    if (pTime->tsense == sc_ts_Pos || pTime->tsense == sc_ts_Non)
+    {
+        pArrOut->rise  = Abc_MaxFloat( pArrOut->rise,  pArrIn->rise + Scl_LibLookup(&pPower->pCellRise,  pSlewIn->rise, pLoad->rise) );
+        pArrOut->fall  = Abc_MaxFloat( pArrOut->fall,  pArrIn->fall + Scl_LibLookup(&pPower->pCellFall,  pSlewIn->fall, pLoad->fall) );
+    }
+    if (pTime->tsense == sc_ts_Neg || pTime->tsense == sc_ts_Non)
+    {
+        pArrOut->rise  = Abc_MaxFloat( pArrOut->rise,  pArrIn->fall + Scl_LibLookup(&pPower->pCellRise,  pSlewIn->fall, pLoad->rise) );
+        pArrOut->fall  = Abc_MaxFloat( pArrOut->fall,  pArrIn->rise + Scl_LibLookup(&pPower->pCellFall,  pSlewIn->rise, pLoad->fall) );
+    }
+}
 static inline void Scl_LibPinArrival( SC_Timing * pTime, SC_Pair * pArrIn, SC_Pair * pSlewIn, SC_Pair * pLoad, SC_Pair * pArrOut, SC_Pair * pSlewOut )
 {
     if (pTime->tsense == sc_ts_Pos || pTime->tsense == sc_ts_Non)
@@ -717,6 +730,73 @@ static inline SC_Timing * Scl_CellPinTime( SC_Cell * pCell, int iPin )
         return NULL;
     assert( Vec_PtrSize(&pRTime->vTimings) == 1 );
     return (SC_Timing *)Vec_PtrEntry( &pRTime->vTimings, 0 );
+}
+
+/**Function*************************************************************
+
+  Synopsis    [Compute one timing edge.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+static inline void Scl_CellPinPowerEntries( SC_Cell * pCell, int iPin, int * p, int * n )
+{
+    SC_Pin * pPin;
+    SC_Powers * pRPowers;
+    int j;
+    *p = 0;
+    *n = 0;
+    int nPin = -1;
+    assert( iPin >= 0 && iPin < pCell->n_inputs );
+
+    pPin = SC_CellPin( pCell, pCell->n_inputs );
+    char * CurPin;
+    SC_PinForEachRPower(pPin, pRPowers, j)
+    {
+        if ( nPin == -1 || strcmp(CurPin, pRPowers->pName) != 0 )
+        {
+            CurPin = pRPowers->pName;
+            ++nPin;
+        }
+        assert( nPin >= 0);
+        if (nPin == iPin)
+        {
+            if (*p == 0)
+            {
+                *p = j;
+            }
+            ++(*n);
+        }
+    }
+}
+
+/**Function*************************************************************
+
+  Synopsis    [Compute one timing edge.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+static inline SC_Power * Scl_CellPinPower( SC_Cell * pCell, int iPin, int p, int n )
+{
+    SC_Pin * pPin;
+    SC_Powers * pRPowers;
+
+    assert( iPin >= 0 && iPin < pCell->n_inputs );
+
+    pPin = SC_CellPin( pCell, pCell->n_inputs );
+    pRPowers = (SC_Powers *)Vec_PtrEntry( &pPin->vRPowers, p+n );
+    if ( Vec_PtrSize(&pRPowers->vPowers) == 0 )
+        return NULL;
+    return (SC_Power *)Vec_PtrEntry( &pRPowers->vPowers, 0 );
 }
 static inline float Scl_LibPinArrivalEstimate( SC_Cell * pCell, int iPin, float Slew, float Load )
 {

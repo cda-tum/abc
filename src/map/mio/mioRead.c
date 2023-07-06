@@ -623,7 +623,7 @@ static inline Mio_Gate_t * Mio_GateCompare( Mio_Gate_t * pThis, Mio_Gate_t * pNe
         return pThis;
     if ( pThis == NULL )
         return pNew;
-    if ( pThis->dArea > pNew->dArea || (pThis->dArea == pNew->dArea && strcmp(pThis->pName, pNew->pName) > 0) )
+    if ( pThis->dPower_dyn > pNew->dPower_dyn || (pThis->dPower_dyn == pNew->dPower_dyn && strcmp(pThis->pName, pNew->pName) > 0) )
         return pNew;
     return pThis;
 }
