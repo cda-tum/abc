@@ -551,6 +551,22 @@ static float Abc_SclComputeAverageNetSwitchingPower( SC_Cell ** p )
     float fall_power_avg = 0;
     float power_avg = 0;
 
+    float n_pins = (float)(*p)->n_inputs;
+    float n_lut_entries = powf(2, n_pins-1);
+    int pin_iterator = 0;
+    float rise_power_avg_ges = 0;
+    float fall_power_avg_ges = 0;
+
+    // skip multi output cells
+    SC_Pin * sz_pin;
+    SC_Cell* cell_sz = *p;
+    float size_vec = Vec_PtrSize(&cell_sz->vPins);
+    size_vec -= n_pins;
+    if (size_vec != 1)
+    {
+        return 1;
+    }
+
     // ToDo (hibenj): Derive the size of the matrix for initialization
     float* rise_avg[7];
     for ( int x = 0; x < 7; x++ )
@@ -561,15 +577,163 @@ static float Abc_SclComputeAverageNetSwitchingPower( SC_Cell ** p )
         fall_avg[x] = (float*)calloc(7, sizeof(float));
 
     SC_Pin * PinOut;
+    float Count_Entries_n = 0;
     SC_CellForEachPinOut( (*p), PinOut, i )
     {
         SC_Powers * pRPowers;
         SC_PinForEachRPower(PinOut, pRPowers, j)
         {
+            float entry_size = Vec_PtrSize(&PinOut->vRPowers);
             // For every internal_power() entry compute the average
             SC_Power * pRPower;
+            char * new_name = "";
             Vec_PtrForEachEntry( SC_Power *, &pRPowers->vPowers, pRPower, k )
             {
+                SC_Pin * cur_pin;
+                SC_Cell* cell_vec = *p;
+                cur_pin = Vec_PtrEntry( (&cell_vec->vPins), pin_iterator);
+                char* n_pin_it = cur_pin->pName;
+                char* n_pin = pRPowers->pName;
+                if( strcmp(n_pin, new_name) == 0 )
+                {
+                    ++Count_Entries_n;
+                    // make normal computation
+                    if (CountEntries == entry_size-1)
+                    {
+                        SC_Surface * tempRise = &(pRPower->pCellRise);
+                        Vec_Flt_t * Rise_Entry;
+                        Vec_PtrForEachEntry( Vec_Flt_t *, &tempRise->vData, Rise_Entry, Ind1 )
+                        {
+                            float Data_val;
+                            Vec_FltForEachEntry( Rise_Entry, Data_val, Ind2 )
+                            {
+                                rise_avg[Ind1][Ind2] += fabsf( Data_val );
+                            }
+                        }
+
+                        SC_Surface * tempFall = &(pRPower->pCellFall);
+                        Vec_Flt_t * Fall_Entry;
+                        Vec_PtrForEachEntry( Vec_Flt_t *, &tempFall->vData, Fall_Entry, Ind1 )
+                        {
+                            float Data_val;
+                            Vec_FltForEachEntry( Fall_Entry, Data_val, Ind2 )
+                            {
+                                fall_avg[Ind1][Ind2] += fabsf( Data_val );
+                            }
+                        }
+
+                        if ( Count_Entries_n == 0 )
+                        {
+                            Count_Entries_n = 1;
+                        }
+
+                        for ( int x = 0; x < 7; x++ )
+                        {
+                            for ( int y = 0; y < 7; y++ )
+                            {
+                                rise_avg[x][y] /= Count_Entries_n;
+                                fall_avg[x][y] /= Count_Entries_n;
+                            }
+                        }
+
+                        for ( int x = 0; x < 7; x++ )
+                        {
+                            for ( int y = 0; y < 7; y++ )
+                            {
+                                rise_power_avg += rise_avg[x][y];
+                                fall_power_avg += fall_avg[x][y];
+                                rise_avg[x][y] = 0;
+                                fall_avg[x][y] = 0;
+                            }
+                        }
+                        rise_power_avg_ges += ( ( rise_power_avg / ( 7 * 7 ) ) * Count_Entries_n ) / n_lut_entries;
+                        fall_power_avg_ges += ( ( fall_power_avg / ( 7 * 7 ) ) * Count_Entries_n ) / n_lut_entries;
+                        Count_Entries_n = 1;
+                        ++pin_iterator;
+                    }
+                }
+                else
+                {
+                    if (CountEntries == entry_size-1)
+                    {
+                        SC_Surface * tempRise = &(pRPower->pCellRise);
+                        Vec_Flt_t * Rise_Entry;
+                        Vec_PtrForEachEntry( Vec_Flt_t *, &tempRise->vData, Rise_Entry, Ind1 )
+                        {
+                            float Data_val;
+                            Vec_FltForEachEntry( Rise_Entry, Data_val, Ind2 )
+                            {
+                                rise_avg[Ind1][Ind2] += fabsf( Data_val );
+                            }
+                        }
+
+                        SC_Surface * tempFall = &(pRPower->pCellFall);
+                        Vec_Flt_t * Fall_Entry;
+                        Vec_PtrForEachEntry( Vec_Flt_t *, &tempFall->vData, Fall_Entry, Ind1 )
+                        {
+                            float Data_val;
+                            Vec_FltForEachEntry( Fall_Entry, Data_val, Ind2 )
+                            {
+                                fall_avg[Ind1][Ind2] += fabsf( Data_val );
+                            }
+                        }
+
+                        if ( Count_Entries_n == 0 )
+                        {
+                            Count_Entries_n = 1;
+                        }
+
+                        for ( int x = 0; x < 7; x++ )
+                        {
+                            for ( int y = 0; y < 7; y++ )
+                            {
+                                rise_avg[x][y] /= Count_Entries_n;
+                                fall_avg[x][y] /= Count_Entries_n;
+                            }
+                        }
+
+                        for ( int x = 0; x < 7; x++ )
+                        {
+                            for ( int y = 0; y < 7; y++ )
+                            {
+                                rise_power_avg += rise_avg[x][y];
+                                fall_power_avg += fall_avg[x][y];
+                                rise_avg[x][y] = 0;
+                                fall_avg[x][y] = 0;
+                            }
+                        }
+                        rise_power_avg_ges += ( ( rise_power_avg / ( 7 * 7 ) ) * Count_Entries_n ) / n_lut_entries;
+                        fall_power_avg_ges += ( ( fall_power_avg / ( 7 * 7 ) ) * Count_Entries_n ) / n_lut_entries;
+                        Count_Entries_n = 1;
+                        ++pin_iterator;
+                    }
+                    else if ( Count_Entries_n > 0 )
+                    {
+                        for ( int x = 0; x < 7; x++ )
+                        {
+                            for ( int y = 0; y < 7; y++ )
+                            {
+                                rise_avg[x][y] /= Count_Entries_n;
+                                fall_avg[x][y] /= Count_Entries_n;
+                            }
+                        }
+
+                        for ( int x = 0; x < 7; x++ )
+                        {
+                            for ( int y = 0; y < 7; y++ )
+                            {
+                                rise_power_avg += rise_avg[x][y];
+                                fall_power_avg += fall_avg[x][y];
+                                rise_avg[x][y] = 0;
+                                fall_avg[x][y] = 0;
+                            }
+                        }
+                        rise_power_avg_ges += ( ( rise_power_avg / ( 7 * 7 ) ) * Count_Entries_n ) / n_lut_entries;
+                        fall_power_avg_ges += ( ( fall_power_avg / ( 7 * 7 ) ) * Count_Entries_n ) / n_lut_entries;
+                        Count_Entries_n = 1;
+                        ++pin_iterator;
+                    }
+                }
                 // For the rise_power() entry compute the average
                 SC_Surface * tempRise = &(pRPower->pCellRise);
                 Vec_Flt_t * Rise_Entry;
@@ -592,30 +756,11 @@ static float Abc_SclComputeAverageNetSwitchingPower( SC_Cell ** p )
                         fall_avg[Ind1][Ind2] += fabsf( Data_val );
                     }
                 }
-                CountEntries++;
             }
+            new_name = pRPowers->pName;
+            ++CountEntries;
         }
     }
-
-    for ( int x = 0; x < 7; x++ )
-    {
-        for ( int y = 0; y < 7; y++ )
-        {
-            rise_avg[x][y] /= CountEntries;
-            fall_avg[x][y] /= CountEntries;
-        }
-    }
-
-    for ( int x = 0; x < 7; x++ )
-    {
-        for ( int y = 0; y < 7; y++ )
-        {
-            rise_power_avg += rise_avg[x][y];
-            fall_power_avg += fall_avg[x][y];
-        }
-    }
-    rise_power_avg /= ( 7 * 7 );
-    fall_power_avg /= ( 7 * 7 );
 
     for ( int x = 0; x < 7; x++ )
         ABC_FREE( rise_avg[x] );
@@ -623,7 +768,7 @@ static float Abc_SclComputeAverageNetSwitchingPower( SC_Cell ** p )
     for ( int x = 0; x < 7; x++ )
         ABC_FREE( fall_avg[x] );
 
-    power_avg = ( rise_power_avg + fall_power_avg ) / 2;
+    power_avg = ( rise_power_avg_ges + fall_power_avg_ges ) / 2;
 
     return power_avg;
 }
@@ -645,6 +790,7 @@ static float Abc_SclComputeAverageCellInternalPower( SC_Cell ** p )
     float rise_power_avg = 0;
     float fall_power_avg = 0;
     float power_avg = 0;
+    float n_lut_entries = powf(2, (float)(*p)->n_inputs-1);
 
     // ToDo (hibenj): Derive the size of the matrix for initialization
     float* rise_avg;
@@ -710,12 +856,10 @@ static float Abc_SclComputeAverageCellInternalPower( SC_Cell ** p )
             rise_avg[x] = 0;
             fall_avg[x] = 0;
         }
-        rise_power_avg = rise_power_avg + (rise_power_avg_pin / 7 );
-        fall_power_avg = fall_power_avg + (fall_power_avg_pin / 7 );
+        rise_power_avg = rise_power_avg + ( ( rise_power_avg_pin / 7 ) * CountEntries ) / n_lut_entries;
+        fall_power_avg = fall_power_avg + ( ( fall_power_avg_pin / 7 ) * CountEntries ) / n_lut_entries;
     }
-    /*float n_pins = (float)(*p)->n_inputs;
-    rise_power_avg = rise_power_avg / n_pins;
-    fall_power_avg = fall_power_avg / n_pins;*/
+
 
     ABC_FREE( rise_avg );
 
