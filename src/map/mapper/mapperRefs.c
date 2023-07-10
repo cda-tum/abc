@@ -771,7 +771,7 @@ float Map_MappingGetPower( Map_Man_t * pMan )
                     Mio_GateIncProfile2( pNode->pCutBest[1]->M[1].pSuperBest->pRoot );
             }
         }
-        // count power of the interver if we need to implement one phase with another phase
+        // count power of the inverter if we need to implement one phase with another phase
         if ( (pNode->pCutBest[0] == NULL && pNode->nRefAct[0] > 0) ||
              (pNode->pCutBest[1] == NULL && pNode->nRefAct[1] > 0) )
             Power += pMan->pSuperLib->PowerInv;
