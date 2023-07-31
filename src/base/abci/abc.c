@@ -18004,7 +18004,7 @@ int Abc_CommandMap( Abc_Frame_t * pAbc, int argc, char ** argv )
         return 1;
     }
 
-    if ( fAreaOnly )
+    if ( fAreaOnly || fDynPower )
         DelayTarget = ABC_INFINITY;
 
     if ( !Abc_NtkIsStrash(pNtk) )

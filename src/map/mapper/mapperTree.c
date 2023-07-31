@@ -669,7 +669,7 @@ int Map_LibraryDeriveGateInfo( Map_SuperLib_t * pLib, st__table * tExcludeGate, 
         // count gates and area of the supergate
         pGate->nGates = 1;
         pGate->Area   = (float)Mio_GateReadArea(pGate->pRoot);
-        pGate->Power  = (float)Mio_GateReadPower(pGate->pRoot);
+        pGate->Power  = (float)Mio_GateReadPower(pGate->pRoot); //*pGate->tDelayMax.Fall
         for ( k = 0; k < (int)pGate->nFanins; k++ )
         {
             pGate->nGates += pGate->pFanins[k]->nGates;

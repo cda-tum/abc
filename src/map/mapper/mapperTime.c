@@ -389,6 +389,11 @@ void Map_TimeComputeRequiredGlobal( Map_Man_t * p )
     int fPhase, i; 
     // update the required times according to the target
     p->fRequiredGlo = Map_TimeComputeArrivalMax( p );
+    if( p->fMappingMode == 0 )
+    {
+        p->fRequiredGlo *= 2;
+    }
+
     if ( p->DelayTarget != -1 )
     {
         if ( p->fRequiredGlo > p->DelayTarget + p->fEpsilon )

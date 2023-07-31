@@ -532,6 +532,31 @@ static float Abc_SclComputeMedianCellInternalPower( SC_Cell ** p )
 
     return power_med;
 }
+
+static void
+Abc_SclAverageMatrixEntriesPower(float **rise_avg, float **fall_avg, const float* Count_Entries_n, float* rise_power_avg,
+                                 float* fall_power_avg, const float* n_lut_entries, float* rise_power_avg_ges,
+                                 float* fall_power_avg_ges) {
+    for (int x = 0; x < 7; x++) {
+        for (int y = 0; y < 7; y++) {
+            rise_avg[x][y] /= *Count_Entries_n;
+            fall_avg[x][y] /= *Count_Entries_n;
+        }
+    }
+
+    for (int x = 0; x < 7; x++) {
+        for (int y = 0; y < 7; y++) {
+            *rise_power_avg += rise_avg[x][y];
+            *fall_power_avg += fall_avg[x][y];
+            rise_avg[x][y] = 0;
+            fall_avg[x][y] = 0;
+        }
+    }
+    *rise_power_avg_ges += (*rise_power_avg / (7 * 7)) * (*Count_Entries_n / *n_lut_entries);
+    *fall_power_avg_ges += (*fall_power_avg / (7 * 7)) * (*Count_Entries_n / *n_lut_entries);
+    *rise_power_avg = 0;
+    *fall_power_avg = 0;
+}
 /**Function*************************************************************
 
   Synopsis    [Computes the average net switching power consumption of a cell.]
@@ -622,29 +647,8 @@ static float Abc_SclComputeAverageNetSwitchingPower( SC_Cell ** p )
                             Count_Entries_n = 1;
                         }
 
-                        for ( int x = 0; x < 7; x++ )
-                        {
-                            for ( int y = 0; y < 7; y++ )
-                            {
-                                rise_avg[x][y] /= Count_Entries_n;
-                                fall_avg[x][y] /= Count_Entries_n;
-                            }
-                        }
-
-                        for ( int x = 0; x < 7; x++ )
-                        {
-                            for ( int y = 0; y < 7; y++ )
-                            {
-                                rise_power_avg += rise_avg[x][y];
-                                fall_power_avg += fall_avg[x][y];
-                                rise_avg[x][y] = 0;
-                                fall_avg[x][y] = 0;
-                            }
-                        }
-                        rise_power_avg_ges +=  ( rise_power_avg / ( 7 * 7 ) ) * ( Count_Entries_n  / n_lut_entries );
-                        fall_power_avg_ges +=  ( fall_power_avg / ( 7 * 7 ) ) * ( Count_Entries_n  / n_lut_entries );
-                        rise_power_avg = 0;
-                        fall_power_avg = 0;
+                        Abc_SclAverageMatrixEntriesPower(rise_avg, fall_avg, &Count_Entries_n, &rise_power_avg, &fall_power_avg,
+                                                         &n_lut_entries, &rise_power_avg_ges, &fall_power_avg_ges);
                         Count_Entries_n = 1;
                     }
                 }
@@ -679,55 +683,13 @@ static float Abc_SclComputeAverageNetSwitchingPower( SC_Cell ** p )
                             Count_Entries_n = 1;
                         }
 
-                        for ( int x = 0; x < 7; x++ )
-                        {
-                            for ( int y = 0; y < 7; y++ )
-                            {
-                                rise_avg[x][y] /= Count_Entries_n;
-                                fall_avg[x][y] /= Count_Entries_n;
-                            }
-                        }
-
-                        for ( int x = 0; x < 7; x++ )
-                        {
-                            for ( int y = 0; y < 7; y++ )
-                            {
-                                rise_power_avg += rise_avg[x][y];
-                                fall_power_avg += fall_avg[x][y];
-                                rise_avg[x][y] = 0;
-                                fall_avg[x][y] = 0;
-                            }
-                        }
-                        rise_power_avg_ges +=  ( rise_power_avg / ( 7 * 7 ) ) * ( Count_Entries_n  / n_lut_entries );
-                        fall_power_avg_ges +=  ( fall_power_avg / ( 7 * 7 ) ) * ( Count_Entries_n  / n_lut_entries );
-                        rise_power_avg = 0;
-                        fall_power_avg = 0;
+                        Abc_SclAverageMatrixEntriesPower(rise_avg, fall_avg, &Count_Entries_n, &rise_power_avg, &fall_power_avg,
+                                                         &n_lut_entries, &rise_power_avg_ges, &fall_power_avg_ges);
                     }
                     else if (CountEntries == entry_size-1)
                     {
-                        for ( int x = 0; x < 7; x++ )
-                        {
-                            for ( int y = 0; y < 7; y++ )
-                            {
-                                rise_avg[x][y] /= Count_Entries_n;
-                                fall_avg[x][y] /= Count_Entries_n;
-                            }
-                        }
-
-                        for ( int x = 0; x < 7; x++ )
-                        {
-                            for ( int y = 0; y < 7; y++ )
-                            {
-                                rise_power_avg += rise_avg[x][y];
-                                fall_power_avg += fall_avg[x][y];
-                                rise_avg[x][y] = 0;
-                                fall_avg[x][y] = 0;
-                            }
-                        }
-                        rise_power_avg_ges +=  ( rise_power_avg / ( 7 * 7 ) ) * ( Count_Entries_n  / n_lut_entries );
-                        fall_power_avg_ges +=  ( fall_power_avg / ( 7 * 7 ) ) * ( Count_Entries_n  / n_lut_entries );
-                        rise_power_avg = 0;
-                        fall_power_avg = 0;
+                        Abc_SclAverageMatrixEntriesPower(rise_avg, fall_avg, &Count_Entries_n, &rise_power_avg, &fall_power_avg,
+                                                         &n_lut_entries, &rise_power_avg_ges, &fall_power_avg_ges);
                         Count_Entries_n = 1;
 
                         SC_Surface * tempRise = &(pRPower->pCellRise);
@@ -757,55 +719,13 @@ static float Abc_SclComputeAverageNetSwitchingPower( SC_Cell ** p )
                             Count_Entries_n = 1;
                         }
 
-                        for ( int x = 0; x < 7; x++ )
-                        {
-                            for ( int y = 0; y < 7; y++ )
-                            {
-                                rise_avg[x][y] /= Count_Entries_n;
-                                fall_avg[x][y] /= Count_Entries_n;
-                            }
-                        }
-
-                        for ( int x = 0; x < 7; x++ )
-                        {
-                            for ( int y = 0; y < 7; y++ )
-                            {
-                                rise_power_avg += rise_avg[x][y];
-                                fall_power_avg += fall_avg[x][y];
-                                rise_avg[x][y] = 0;
-                                fall_avg[x][y] = 0;
-                            }
-                        }
-                        rise_power_avg_ges +=  ( rise_power_avg / ( 7 * 7 ) ) * ( Count_Entries_n  / n_lut_entries );
-                        fall_power_avg_ges +=  ( fall_power_avg / ( 7 * 7 ) ) * ( Count_Entries_n  / n_lut_entries );
-                        rise_power_avg = 0;
-                        fall_power_avg = 0;
+                        Abc_SclAverageMatrixEntriesPower(rise_avg, fall_avg, &Count_Entries_n, &rise_power_avg, &fall_power_avg,
+                                                         &n_lut_entries, &rise_power_avg_ges, &fall_power_avg_ges);
                     }
                     else if ( Count_Entries_n > 0 )
                     {
-                        for ( int x = 0; x < 7; x++ )
-                        {
-                            for ( int y = 0; y < 7; y++ )
-                            {
-                                rise_avg[x][y] /= Count_Entries_n;
-                                fall_avg[x][y] /= Count_Entries_n;
-                            }
-                        }
-
-                        for ( int x = 0; x < 7; x++ )
-                        {
-                            for ( int y = 0; y < 7; y++ )
-                            {
-                                rise_power_avg += rise_avg[x][y];
-                                fall_power_avg += fall_avg[x][y];
-                                rise_avg[x][y] = 0;
-                                fall_avg[x][y] = 0;
-                            }
-                        }
-                        rise_power_avg_ges +=  ( rise_power_avg / ( 7 * 7 ) ) * ( Count_Entries_n  / n_lut_entries );
-                        fall_power_avg_ges +=  ( fall_power_avg / ( 7 * 7 ) ) * ( Count_Entries_n  / n_lut_entries );
-                        rise_power_avg = 0;
-                        fall_power_avg = 0;
+                        Abc_SclAverageMatrixEntriesPower(rise_avg, fall_avg, &Count_Entries_n, &rise_power_avg, &fall_power_avg,
+                                                         &n_lut_entries, &rise_power_avg_ges, &fall_power_avg_ges);
                     }
                     Count_Entries_n = 1;
                 }
@@ -845,7 +765,7 @@ static float Abc_SclComputeAverageNetSwitchingPower( SC_Cell ** p )
 
     power_avg = ( rise_power_avg_ges + fall_power_avg_ges ) / 2;
 
-    return power_avg*n_pins;
+    return power_avg * (4/(n_pins+4)); // (4/(n_pins+4))
 }
 /**Function*************************************************************
 
@@ -943,7 +863,7 @@ static float Abc_SclComputeAverageCellInternalPower( SC_Cell ** p )
 
     power_avg = ( rise_power_avg + fall_power_avg ) / 2;
 
-    return power_avg*n_pins;
+    return power_avg * (4/(n_pins+4)); //(4/(n_pins+4))
 }
 /**Function*************************************************************
 
@@ -1377,8 +1297,8 @@ float Abc_SclComputeDelayClassPin( SC_Lib * p, SC_Cell * pRepr, int iPin, float 
     {
         if ( pCell->fSkip ) 
             continue;
-        /*if ( pRepr != pCell ) // skip the first gate
-            continue;*/
+        if ( pRepr != pCell ) // only use information of pRepr
+            continue;
         Delay += Abc_SclComputeDelayCellPin( p, pCell, iPin, Slew, Gain );
         Count++;
     }
@@ -1399,7 +1319,7 @@ float Abc_SclComputePowerClassPin( SC_Cell * pRepr )
     {
         if ( pCell->fSkip )
             continue;
-        if ( pRepr != pCell ) // skip the first gate
+        if ( pRepr != pCell ) // only use information of pRepr
             continue;
         Power += Abc_SclComputeAveragePower( &pCell );
         Count++;
