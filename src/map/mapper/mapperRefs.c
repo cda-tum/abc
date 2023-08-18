@@ -381,19 +381,20 @@ float Map_CutRefDeref( Map_Cut_t * pCut, int fPhase, int fReference, int fUpdate
   seealso     []
 
 ***********************************************************************/
-float Map_PowerCutRefDeref( Map_Cut_t * pCut, int fPhase, int fReference, int fUpdateProf )
+float Map_PowerCutRefDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, int fReference, int fUpdateProf )
 {
     Map_Node_t * pNodeChild;
     Map_Cut_t * pCutChild;
-    float aPower;
+    float aPower, aSwitchActivity;
     int i, fPhaseChild;
 //    int nRefs;
-
+    // start switching activity for the node
+    aSwitchActivity = pNode->Switching;
     // consider the elementary variable
     if ( pCut->nLeaves == 1 )
-        return 0;
+        return aSwitchActivity;
     // start the power of this cut
-    aPower = Map_CutGetRootPower( pCut, fPhase );
+    aPower = Map_CutGetRootPower( pCut, fPhase ) * aSwitchActivity;
     if ( fUpdateProf )
     {
         if ( fReference )
@@ -422,7 +423,7 @@ float Map_PowerCutRefDeref( Map_Cut_t * pCut, int fPhase, int fReference, int fU
                 // inverter should be added if the phase
                 // (a) has no reference and (b) is implemented using other phase
                 if ( pNodeChild->nRefAct[fPhaseChild]++ == 0 && pNodeChild->pCutBest[fPhaseChild] == NULL )
-                    aPower += pNodeChild->p->pSuperLib->PowerInv;
+                    aPower += pNodeChild->p->pSuperLib->PowerInv * pNodeChild->Switching;
                 // if the node is referenced, there is no recursive call
                 if ( pNodeChild->nRefAct[2]++ > 0 )
                     continue;
@@ -442,7 +443,7 @@ float Map_PowerCutRefDeref( Map_Cut_t * pCut, int fPhase, int fReference, int fU
                 // inverter should be added if the phase
                 // (a) has no reference and (b) is implemented using other phase
                 if ( --pNodeChild->nRefAct[fPhaseChild] == 0 && pNodeChild->pCutBest[fPhaseChild] == NULL )
-                    aPower += pNodeChild->p->pSuperLib->PowerInv;
+                    aPower += pNodeChild->p->pSuperLib->PowerInv * pNodeChild->Switching;
                 // if the node is referenced, there is no recursive call
                 if ( --pNodeChild->nRefAct[2] > 0 )
                     continue;
@@ -459,7 +460,7 @@ float Map_PowerCutRefDeref( Map_Cut_t * pCut, int fPhase, int fReference, int fU
             pCutChild   = pNodeChild->pCutBest[fPhaseChild];
         }
         // reference and compute power recursively
-        aPower += Map_PowerCutRefDeref( pCutChild, fPhaseChild, fReference, fUpdateProf );
+        aPower += Map_PowerCutRefDeref( pNodeChild, pCutChild, fPhaseChild, fReference, fUpdateProf );
     }
     return aPower;
 }
@@ -515,11 +516,11 @@ float Map_CutGetAreaDerefed( Map_Cut_t * pCut, int fPhase )
   seealso     []
 
 ***********************************************************************/
-float Map_CutGetPowerDerefed( Map_Cut_t * pCut, int fPhase )
+float Map_CutGetPowerDerefed( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase )
 {
     float aResult, aResult2;
-    aResult2 = Map_PowerCutRefDeref( pCut, fPhase, 1, 0 ); // reference
-    aResult  = Map_PowerCutRefDeref( pCut, fPhase, 0, 0 ); // dereference
+    aResult2 = Map_PowerCutRefDeref( pNode, pCut, fPhase, 1, 0 ); // reference
+    aResult  = Map_PowerCutRefDeref( pNode, pCut, fPhase, 0, 0 ); // dereference
 //    assert( aResult == aResult2 );
     return aResult;
 }
@@ -567,9 +568,9 @@ float Map_CutDeref( Map_Cut_t * pCut, int fPhase, int fProfile )
   seealso     []
 
 ***********************************************************************/
-float Map_PowerCutRef( Map_Cut_t * pCut, int fPhase, int fProfile )
+float Map_PowerCutRef( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, int fProfile )
 {
-    return Map_PowerCutRefDeref( pCut, fPhase, 1, fProfile ); // reference
+    return Map_PowerCutRefDeref( pNode, pCut, fPhase, 1, fProfile ); // reference
 }
 
 /**function*************************************************************
@@ -583,9 +584,9 @@ float Map_PowerCutRef( Map_Cut_t * pCut, int fPhase, int fProfile )
   seealso     []
 
 ***********************************************************************/
-float Map_PowerCutDeref( Map_Cut_t * pCut, int fPhase, int fProfile )
+float Map_PowerCutDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, int fProfile )
 {
-    return Map_PowerCutRefDeref( pCut, fPhase, 0, fProfile ); // dereference
+    return Map_PowerCutRefDeref( pNode, pCut, fPhase, 0, fProfile ); // dereference
 }
 
 /**Function*************************************************************

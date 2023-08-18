@@ -49,19 +49,11 @@ ABC_NAMESPACE_IMPL_START
 ***********************************************************************/
 int Map_Mapping( Map_Man_t * p )
 {
-    if (p->fPowerRecovery) {
-        p->fSwitching = 1;
-    }
     int fShowSwitching = 0;
-    int fUseAreaFlow = 1;
-    int fUseExactArea = !p->fSwitching;
-    int fUseExactAreaWithPhase = !p->fSwitching;
-    int fUsePowerFlow = 0;
-    if (p->fPowerRecovery) {
-        fUseAreaFlow = 0;
-        fUsePowerFlow = 1;
-        p->fSwitching = 0;
-    }
+    int fUseAreaFlow = !p->fPowerRecovery;
+    int fUseExactArea = !p->fSwitching && !p->fPowerRecovery;
+    int fUseExactAreaWithPhase = !p->fSwitching && !p->fPowerRecovery;
+
     abctime clk;
 
     //////////////////////////////////////////////////////////////////////
@@ -240,7 +232,7 @@ ABC_PRT( "Time", p->timeMatch );
     //////////////////////////////////////////////////////////////////////
     // perform power recovery using power flow
     clk = Abc_Clock();
-    if ( fUsePowerFlow )
+    if ( p->fPowerRecovery )
     {
         // compute the required times
         Map_TimeComputeRequiredGlobal( p );
@@ -267,7 +259,7 @@ ABC_PRT( "Time", p->timeMatch );
     //////////////////////////////////////////////////////////////////////
     // perform power recovery using exact power
     clk = Abc_Clock();
-    if ( fUsePowerFlow )
+    if ( p->fPowerRecovery )
     {
         // compute the required times
         Map_TimeComputeRequiredGlobal( p );
