@@ -670,6 +670,8 @@ static float Abc_SclComputeAverageCellInternalPower( SC_Cell ** p )
     float rise_power_avg = 0;
     float fall_power_avg = 0;
     float power_avg = 0;
+    float rise_power_avg_pin = 0;
+    float fall_power_avg_pin = 0;
 
     // ToDo (hibenj): Derive the size of the matrix for initialization
     float* rise_avg;
@@ -681,8 +683,6 @@ static float Abc_SclComputeAverageCellInternalPower( SC_Cell ** p )
     SC_Pin * PinIn;
     SC_CellForEachPinIn( (*p), PinIn, i )
     {
-        float rise_power_avg_pin = 0;
-        float fall_power_avg_pin = 0;
         SC_Powers * pRPowers;
         SC_PinForEachRPower(PinIn, pRPowers, j)
         {
@@ -721,20 +721,23 @@ static float Abc_SclComputeAverageCellInternalPower( SC_Cell ** p )
             ABC_FREE( fall_avg );
             return 0;
         }
-        for ( int x = 0; x < 7; x++ )
-        {
-            rise_avg[x] /= CountEntries;
-            fall_avg[x] /= CountEntries;
-        }
-
-        for ( int x = 0; x < 7; x++ )
-        {
-            rise_power_avg_pin += rise_avg[x];
-            fall_power_avg_pin += fall_avg[x];
-        }
-        rise_power_avg = rise_power_avg + rise_power_avg_pin / ( 7 );
-        fall_power_avg = fall_power_avg + fall_power_avg_pin / ( 7 );
     }
+
+    for ( int x = 0; x < 7; x++ )
+    {
+        rise_avg[x] /= CountEntries;
+        fall_avg[x] /= CountEntries;
+    }
+
+    for ( int x = 0; x < 7; x++ )
+    {
+        rise_power_avg_pin += rise_avg[x];
+        fall_power_avg_pin += fall_avg[x];
+    }
+    float test = (rise_power_avg_pin+fall_power_avg_pin);
+
+    rise_power_avg = rise_power_avg + rise_power_avg_pin / ( 7 );
+    fall_power_avg = fall_power_avg + fall_power_avg_pin / ( 7 );
 
     ABC_FREE( rise_avg );
 
