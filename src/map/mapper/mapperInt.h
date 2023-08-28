@@ -300,7 +300,8 @@ struct Map_SuperStruct_t_
     Map_Time_t          tDelaysF[6];   // the pin-to-pin delay constraints for the rise of the output
     Map_Time_t          tDelayMax;     // the maximum delay
     float               Area;          // the area
-    float               Power;         // the power
+    float               PowerInt;         // the power
+    float               PowerSwi;         // the power
     char *              pFormula;      // the symbolic formula
     Map_Super_t *       pNext;         // the pointer to the next super in the list
 };
@@ -371,7 +372,8 @@ extern Map_Cut_t *       Map_CutAlloc( Map_Man_t * p );
 extern void              Map_CutFree( Map_Man_t * p, Map_Cut_t * pCut );
 extern void              Map_CutPrint( Map_Man_t * p, Map_Node_t * pRoot, Map_Cut_t * pCut, int fPhase );
 extern float             Map_CutGetRootArea( Map_Cut_t * pCut, int fPhase );
-extern float             Map_CutGetRootPower( Map_Cut_t * pCut, int fPhase );
+extern float             Map_CutGetRootPowerInt( Map_Cut_t * pCut, int fPhase );
+extern float             Map_CutGetRootPowerSwi( Map_Cut_t * pCut, int fPhase );
 extern int               Map_CutGetLeafPhase( Map_Cut_t * pCut, int fPhase, int iLeaf );
 extern int               Map_NodeGetLeafPhase( Map_Node_t * pNode, int fPhase, int iLeaf );
 extern Map_Cut_t *       Map_CutListAppend( Map_Cut_t * pSetAll, Map_Cut_t * pSets );

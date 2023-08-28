@@ -131,7 +131,7 @@ Abc_Ntk_t * Abc_NtkMap( Abc_Ntk_t * pNtk, double DelayTarget, double AreaMulti, 
     if ( fShowSwitching )
     {
         extern Vec_Int_t * Sim_NtkComputeSwitching( Abc_Ntk_t * pNtk, int nPatterns );
-        vSwitching = Sim_NtkComputeSwitching( pNtk, 4096 );
+        vSwitching = Sim_NtkComputeSwitching( pNtk, 4096*128 );
         pSwitching = (float *)vSwitching->pArray;
     }
 

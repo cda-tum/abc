@@ -375,7 +375,10 @@ Mio_Gate_t * Mio_LibraryReadGate( char ** ppToken, int fExtendedFormat )
     pGate->dArea = atof( pToken );
 
     pToken = strtok( NULL, " \t\r\n" );
-    pGate->dPower_dyn = atof( pToken );
+    pGate->dPower_int = atof( pToken );
+
+    pToken = strtok( NULL, " \t\r\n" );
+    pGate->dPower_swi = atof( pToken );
 
     // read the formula
 
@@ -623,7 +626,7 @@ static inline Mio_Gate_t * Mio_GateCompare( Mio_Gate_t * pThis, Mio_Gate_t * pNe
         return pThis;
     if ( pThis == NULL )
         return pNew;
-    if ( pThis->dPower_dyn > pNew->dPower_dyn || (pThis->dPower_dyn == pNew->dPower_dyn && strcmp(pThis->pName, pNew->pName) > 0) )
+    if ( pThis->dPower_int > pNew->dPower_int || (pThis->dPower_int == pNew->dPower_int && strcmp(pThis->pName, pNew->pName) > 0) )
         return pNew;
     return pThis;
 }

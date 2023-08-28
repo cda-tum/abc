@@ -235,7 +235,7 @@ float Map_CutGetPowerFlow( Map_Cut_t * pCut, int fPhase )
     int i, fPinPhasePos;
 
     // start the resulting power
-    aFlowRes = pSuper->Power;
+    aFlowRes = pSuper->PowerInt;
     // iterate through the leaves
     for ( i = 0; i < pCut->nLeaves; i++ )
     {
@@ -394,7 +394,8 @@ float Map_PowerCutRefDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, in
     if ( pCut->nLeaves == 1 )
         return aSwitchActivity;
     // start the power of this cut
-    aPower = Map_CutGetRootPower( pCut, fPhase ) * aSwitchActivity;
+    // net switching power of the root gate
+    aPower = Map_CutGetRootPowerSwi( pCut, fPhase ) * aSwitchActivity;
     if ( fUpdateProf )
     {
         if ( fReference )
@@ -407,7 +408,12 @@ float Map_PowerCutRefDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, in
     {
         pNodeChild  = pCut->ppLeaves[i];
         fPhaseChild = Map_CutGetLeafPhase( pCut, fPhase, i );
-        // get the reference counter of the child
+
+        // Add cell internal power (dependent on internal power of the root gate and the switching activity seen at the input pins)
+        //
+        aPower += Map_CutGetRootPowerInt( pCut, fPhase ) * pNodeChild->Switching;
+
+        //Add Power dependent on Phase
 
         if ( fReference )
         {
@@ -422,6 +428,7 @@ float Map_PowerCutRefDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, in
             {
                 // inverter should be added if the phase
                 // (a) has no reference and (b) is implemented using other phase
+                // Inverter only dissipates net switching power
                 if ( pNodeChild->nRefAct[fPhaseChild]++ == 0 && pNodeChild->pCutBest[fPhaseChild] == NULL )
                     aPower += pNodeChild->p->pSuperLib->PowerInv * pNodeChild->Switching;
                 // if the node is referenced, there is no recursive call
@@ -442,6 +449,7 @@ float Map_PowerCutRefDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, in
             {
                 // inverter should be added if the phase
                 // (a) has no reference and (b) is implemented using other phase
+                // todo: when splitting up the power the inverter needs to include cellint and netswi power
                 if ( --pNodeChild->nRefAct[fPhaseChild] == 0 && pNodeChild->pCutBest[fPhaseChild] == NULL )
                     aPower += pNodeChild->p->pSuperLib->PowerInv * pNodeChild->Switching;
                 // if the node is referenced, there is no recursive call
@@ -459,6 +467,9 @@ float Map_PowerCutRefDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, in
             fPhaseChild = !fPhaseChild;
             pCutChild   = pNodeChild->pCutBest[fPhaseChild];
         }
+
+
+
         // reference and compute power recursively
         aPower += Map_PowerCutRefDeref( pNodeChild, pCutChild, fPhaseChild, fReference, fUpdateProf );
     }
@@ -760,14 +771,14 @@ float Map_MappingGetPower( Map_Man_t * pMan )
             // count power of the negative phase
             if ( pNode->pCutBest[0] && (pNode->nRefAct[0] > 0 || pNode->pCutBest[1] == NULL) )
             {
-                Power += pNode->pCutBest[0]->M[0].pSuperBest->Power;
+                Power += pNode->pCutBest[0]->M[0].pSuperBest->PowerInt;
                 if ( pMan->fUseProfile )
                     Mio_GateIncProfile2( pNode->pCutBest[0]->M[0].pSuperBest->pRoot );
             }
             // count power of the positive phase
             if ( pNode->pCutBest[1] && (pNode->nRefAct[1] > 0 || pNode->pCutBest[0] == NULL) )
             {
-                Power += pNode->pCutBest[1]->M[1].pSuperBest->Power;
+                Power += pNode->pCutBest[1]->M[1].pSuperBest->PowerInt;
                 if ( pMan->fUseProfile )
                     Mio_GateIncProfile2( pNode->pCutBest[1]->M[1].pSuperBest->pRoot );
             }

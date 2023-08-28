@@ -316,9 +316,9 @@ int Map_SuperTableCompareGatesInListPower( Map_Super_t ** ppS1, Map_Super_t ** p
 {
 //   if ( (*ppS1)->tDelayMax.Rise > (*ppS2)->tDelayMax.Rise )
 //   if ( (*ppS1)->tDelayMax.Rise < (*ppS2)->tDelayMax.Rise )
-    if ( (*ppS1)->Power > (*ppS2)->Power )
+    if ( (*ppS1)->PowerInt > (*ppS2)->PowerInt )
         return -1;
-    if ( (*ppS1)->Power < (*ppS2)->Power )
+    if ( (*ppS1)->PowerInt < (*ppS2)->PowerInt )
         return 1;
     return 0;
 }

@@ -1468,8 +1468,8 @@ Vec_Str_t * Abc_SclProduceGenlibStrSimple( SC_Lib * p )
     // mark skipped cells
 //    Abc_SclMarkSkippedCells( p );
     vStr = Vec_StrAlloc( 1000 );
-    Vec_StrPrintStr( vStr, "GATE _const0_     0.00       0.00 z=CONST0;\n" );
-    Vec_StrPrintStr( vStr, "GATE _const1_     0.00       0.00 z=CONST1;\n" );
+    Vec_StrPrintStr( vStr, "GATE _const0_      0.00     0.00       0.00 z=CONST0;\n" );
+    Vec_StrPrintStr( vStr, "GATE _const1_      0.00     0.00       0.00 z=CONST1;\n" );
     SC_LibForEachCell( p, pCell, i )
     {
         if ( pCell->n_inputs == 0 )
@@ -1485,6 +1485,10 @@ Vec_Str_t * Abc_SclProduceGenlibStrSimple( SC_Lib * p )
             Vec_StrPrintStr( vStr, Buffer );
             Vec_StrPrintStr( vStr, " " );
             float SwitchingPower = Abc_SclComputeAveragePower ( &pCell );
+            sprintf( Buffer, "%7.2f \n", SwitchingPower );
+            Vec_StrPrintStr( vStr, Buffer );
+            Vec_StrPrintStr( vStr, " " );
+//float SwitchingPower = Abc_SclComputeAveragePower ( &pCell );
             sprintf( Buffer, "%7.2f \n", SwitchingPower );
             Vec_StrPrintStr( vStr, Buffer );
             Vec_StrPrintStr( vStr, " " );
@@ -1551,8 +1555,8 @@ Vec_Str_t * Abc_SclProduceGenlibStr( SC_Lib * p, float Slew, float Gain, int nGa
     // mark skipped cells
     Abc_SclMarkSkippedCells( p );
     vStr = Vec_StrAlloc( 1000 );
-    Vec_StrPrintStr( vStr, "GATE _const0_      0.00     0.00 z=CONST0;\n" );
-    Vec_StrPrintStr( vStr, "GATE _const1_      0.00     0.00 z=CONST1;\n" );
+    Vec_StrPrintStr( vStr, "GATE _const0_      0.00      0.00     0.00 z=CONST0;\n" );
+    Vec_StrPrintStr( vStr, "GATE _const1_      0.00      0.00     0.00 z=CONST1;\n" );
     SC_LibForEachCellClass( p, pRepr, i )
     {
         if ( pRepr->n_inputs == 0 )
@@ -1570,8 +1574,12 @@ Vec_Str_t * Abc_SclProduceGenlibStr( SC_Lib * p, float Slew, float Gain, int nGa
         sprintf( Buffer, "%7.2f", pRepr->area );
         Vec_StrPrintStr( vStr, Buffer );
         Vec_StrPrintStr( vStr, " " );
-        float SwitchingPower = Abc_SclComputePowerClassPin ( pRepr );
-        sprintf( Buffer, "%f \n", SwitchingPower );
+        float CellInternalPower = Abc_SclComputePowerClassPin ( pRepr );
+        sprintf( Buffer, "%f \n", CellInternalPower );
+        Vec_StrPrintStr( vStr, Buffer );
+        Vec_StrPrintStr( vStr, " " );
+        float NetSwitchingPower = Abc_SclComputePowerClassPin ( pRepr );
+        sprintf( Buffer, "%f \n", NetSwitchingPower );
         Vec_StrPrintStr( vStr, Buffer );
         Vec_StrPrintStr( vStr, " " );
         Vec_StrPrintStr( vStr, SC_CellPinName(pRepr, pRepr->n_inputs) );
