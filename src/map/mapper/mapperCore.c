@@ -87,7 +87,7 @@ int Map_Mapping( Map_Man_t * p )
     p->PowerBase = Map_MappingGetPower( p );
 if ( p->fVerbose )
 {
-printf( "Delay     : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.1f  %4.1f %%  ",
+printf( "Delay     : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.5f  %4.1f %%  ",
                     fShowSwitching? "Switch" : "Delay",
                     fShowSwitching? Map_MappingGetSwitching(p) : p->fRequiredGlo,
                     Map_MappingGetAreaFlow(p), p->AreaBase, 0.0, p->PowerBase, 0.0 );
@@ -118,7 +118,7 @@ ABC_PRT( "Time", p->timeMatch );
         p->PowerFinal = Map_MappingGetPower( p );
         if ( p->fVerbose )
         {
-            printf( "AreaFlow  : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.1f  %4.1f %%  ",
+            printf( "AreaFlow  : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.5f  %4.1f %%  ",
                     fShowSwitching? "Switch" : "Delay",
                     fShowSwitching? Map_MappingGetSwitching(p) : p->fRequiredGlo,
                     Map_MappingGetAreaFlow(p), p->AreaFinal,
@@ -145,7 +145,7 @@ ABC_PRT( "Time", p->timeMatch );
         p->PowerFinal = Map_MappingGetPower( p );
         if ( p->fVerbose )
         {
-            printf( "Area      : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.1f  %4.1f %%  ",
+            printf( "Area      : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.5f  %4.1f %%  ",
                     fShowSwitching? "Switch" : "Delay",
                     fShowSwitching? Map_MappingGetSwitching(p) : p->fRequiredGlo,
                     Map_MappingGetAreaFlow(p), p->AreaFinal,
@@ -172,7 +172,7 @@ ABC_PRT( "Time", p->timeMatch );
         p->PowerFinal = Map_MappingGetPower( p );
         if ( p->fVerbose )
         {
-            printf( "Area      : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.1f  %4.1f %%  ",
+            printf( "Area      : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.5f  %4.1f %%  ",
                     fShowSwitching? "Switch" : "Delay",
                     fShowSwitching? Map_MappingGetSwitching(p) : p->fRequiredGlo,
                     Map_MappingGetAreaFlow(p), p->AreaFinal,
@@ -199,7 +199,7 @@ ABC_PRT( "Time", p->timeMatch );
         p->PowerFinal = Map_MappingGetPower( p );
         if ( p->fVerbose )
         {
-            printf( "Switching: %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.1f  %4.1f %%  ",
+            printf( "Switching: %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.5f  %4.1f %%  ",
                     fShowSwitching? "Switch" : "Delay",
                     fShowSwitching? Map_MappingGetSwitching(p) : p->fRequiredGlo,
                     Map_MappingGetAreaFlow(p), p->AreaFinal,
@@ -218,7 +218,7 @@ ABC_PRT( "Time", p->timeMatch );
         p->PowerFinal = Map_MappingGetPower( p );
         if ( p->fVerbose )
         {
-            printf( "Switching: %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.1f  %4.1f %%  ",
+            printf( "Switching: %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.5f  %4.1f %%  ",
                     fShowSwitching? "Switch" : "Delay",
                     fShowSwitching? Map_MappingGetSwitching(p) : p->fRequiredGlo,
                     Map_MappingGetAreaFlow(p), p->AreaFinal,
@@ -245,7 +245,7 @@ ABC_PRT( "Time", p->timeMatch );
         p->PowerFinal = Map_MappingGetPower( p );
         if ( p->fVerbose )
         {
-            printf( "PowerFlow : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.1f  %4.1f %%  ",
+            printf( "PowerFlow : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.5f  %4.1f %%  ",
                     fShowSwitching? "Switch" : "Delay",
                     fShowSwitching? Map_MappingGetSwitching(p) : p->fRequiredGlo,
                     Map_MappingGetAreaFlow(p), p->AreaFinal,
@@ -272,7 +272,7 @@ ABC_PRT( "Time", p->timeMatch );
         p->PowerFinal = Map_MappingGetPower( p );
         if ( p->fVerbose )
         {
-            printf( "Power     : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.1f  %4.1f %%  ",
+            printf( "Power     : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.5f  %4.1f %%  ",
                     fShowSwitching? "Switch" : "Delay",
                     fShowSwitching? Map_MappingGetSwitching(p) : p->fRequiredGlo,
                     Map_MappingGetAreaFlow(p), p->AreaFinal,
@@ -291,7 +291,7 @@ ABC_PRT( "Time", p->timeMatch );
         p->PowerFinal = Map_MappingGetPower( p );
         if ( p->fVerbose )
         {
-            printf( "Power     : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.1f  %4.1f %%  ",
+            printf( "Power     : %s = %8.2f  Flow = %11.1f  Area = %11.1f  %4.1f %%  DynPower = %11.5f  %4.1f %%  ",
                     fShowSwitching? "Switch" : "Delay",
                     fShowSwitching? Map_MappingGetSwitching(p) : p->fRequiredGlo,
                     Map_MappingGetAreaFlow(p), p->AreaFinal,

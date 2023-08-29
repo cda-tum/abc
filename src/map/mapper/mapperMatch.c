@@ -216,7 +216,7 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
                     continue;
                 // get the area (area flow)
                 pMatch->AreaFlow = Map_CutGetAreaFlow( pCut, fPhase );
-                pMatch->PowerF = Map_CutGetPowerFlow( pCut, fPhase );
+                pMatch->PowerF = Map_CutGetPowerFlow( pNode, pCut, fPhase );
             }
             else
             {
@@ -226,7 +226,7 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
                 else if ( p->fMappingMode == 4 )
                     pMatch->AreaFlow = Map_SwitchCutGetDerefed( pNode, pCut, fPhase );
                 else if ( p->fMappingMode == 5 )
-                    pMatch->PowerF = Map_CutGetPowerFlow( pCut, fPhase );
+                    pMatch->PowerF = Map_CutGetPowerFlow( pNode, pCut, fPhase );
                 else if ( p->fMappingMode == 6 )
                     pMatch->PowerF = Map_CutGetPowerDerefed( pNode, pCut, fPhase );
                 else
@@ -266,11 +266,11 @@ int Map_MatchNodeCut( Map_Man_t * p, Map_Node_t * pNode, Map_Cut_t * pCut, int f
             pMatch->AreaFlow = Map_SwitchCutGetDerefed( pNode, pCut, fPhase );
         else if ( p->fMappingMode == 0 )
         {
-            pMatch->PowerF = Map_CutGetPowerFlow( pCut, fPhase );
+            pMatch->PowerF = Map_CutGetPowerFlow( pNode, pCut, fPhase );
             pMatch->AreaFlow = Map_CutGetAreaFlow( pCut, fPhase );
         }
         else if ( p->fMappingMode == 5 )
-            pMatch->PowerF = Map_CutGetPowerFlow( pCut, fPhase );
+            pMatch->PowerF = Map_CutGetPowerFlow( pNode, pCut, fPhase );
         else if ( p->fMappingMode == 6 )
             pMatch->PowerF = Map_CutGetPowerDerefed( pNode, pCut, fPhase );
         else

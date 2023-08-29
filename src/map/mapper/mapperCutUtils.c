@@ -121,7 +121,7 @@ float Map_CutGetRootArea( Map_Cut_t * pCut, int fPhase )
 
 /**function*************************************************************
 
-  synopsis    [Computes the exact power associated with the cut.]
+  synopsis    [Computes the exact internal power associated with the cut.]
 
   description []
 
@@ -138,7 +138,7 @@ float Map_CutGetRootPowerInt( Map_Cut_t * pCut, int fPhase )
 
 /**function*************************************************************
 
-  synopsis    [Computes the exact power associated with the cut.]
+  synopsis    [Computes the exact switching power associated with the cut.]
 
   description []
 
@@ -150,7 +150,7 @@ float Map_CutGetRootPowerInt( Map_Cut_t * pCut, int fPhase )
 float Map_CutGetRootPowerSwi( Map_Cut_t * pCut, int fPhase )
 {
     assert( pCut->M[fPhase].pSuperBest );
-    return pCut->M[fPhase].pSuperBest->PowerInt;
+    return pCut->M[fPhase].pSuperBest->PowerSwi;
 }
 
 /**function*************************************************************

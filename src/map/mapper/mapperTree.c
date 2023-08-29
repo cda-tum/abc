@@ -669,12 +669,14 @@ int Map_LibraryDeriveGateInfo( Map_SuperLib_t * pLib, st__table * tExcludeGate, 
         // count gates and area of the supergate
         pGate->nGates = 1;
         pGate->Area   = (float)Mio_GateReadArea(pGate->pRoot);
-        pGate->PowerInt  = (float)Mio_GateReadPower(pGate->pRoot); //*pGate->tDelayMax.Fall
+        pGate->PowerInt  = (float)Mio_GateReadPowerInt(pGate->pRoot); //*pGate->tDelayMax.Fall
+        pGate->PowerSwi  = (float)Mio_GateReadPowerSwi(pGate->pRoot); //*pGate->tDelayMax.Fall
         for ( k = 0; k < (int)pGate->nFanins; k++ )
         {
-            pGate->nGates += pGate->pFanins[k]->nGates;
-            pGate->Area   += pGate->pFanins[k]->Area;
+            pGate->nGates    += pGate->pFanins[k]->nGates;
+            pGate->Area      += pGate->pFanins[k]->Area;
             pGate->PowerInt  += pGate->pFanins[k]->PowerInt;
+            pGate->PowerSwi  += pGate->pFanins[k]->PowerSwi;
         }
         // do not add the gate to the table, if this gate is an internal gate
         // of some supegate and does not correspond to a supergate output

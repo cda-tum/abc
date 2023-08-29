@@ -142,7 +142,8 @@ extern void              Mio_LibrarySetName        ( Mio_Library_t * pLib, char 
 extern char *            Mio_GateReadName          ( Mio_Gate_t * pGate );      
 extern char *            Mio_GateReadOutName       ( Mio_Gate_t * pGate );      
 extern double            Mio_GateReadArea          ( Mio_Gate_t * pGate );
-extern double            Mio_GateReadPower         ( Mio_Gate_t * pGate );
+extern double            Mio_GateReadPowerInt      ( Mio_Gate_t * pGate );
+extern double            Mio_GateReadPowerSwi      ( Mio_Gate_t * pGate );
 extern char *            Mio_GateReadForm          ( Mio_Gate_t * pGate );      
 extern Mio_Pin_t *       Mio_GateReadPins          ( Mio_Gate_t * pGate );      
 extern Mio_Library_t *   Mio_GateReadLib           ( Mio_Gate_t * pGate );      

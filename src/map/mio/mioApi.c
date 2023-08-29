@@ -170,7 +170,8 @@ char * Mio_LibraryReadSopByName( Mio_Library_t * pLib, char * pName )
 char *            Mio_GateReadName     ( Mio_Gate_t * pGate )            { return pGate->pName;     }
 char *            Mio_GateReadOutName  ( Mio_Gate_t * pGate )            { return pGate->pOutName;  }
 double            Mio_GateReadArea     ( Mio_Gate_t * pGate )            { return pGate->dArea;     }
-double            Mio_GateReadPower    ( Mio_Gate_t * pGate )            { return pGate->dPower_int;}
+double            Mio_GateReadPowerInt ( Mio_Gate_t * pGate )            { return pGate->dPower_int;}
+double            Mio_GateReadPowerSwi ( Mio_Gate_t * pGate )            { return pGate->dPower_swi;}
 char *            Mio_GateReadForm     ( Mio_Gate_t * pGate )            { return pGate->pForm;     }
 Mio_Pin_t *       Mio_GateReadPins     ( Mio_Gate_t * pGate )            { return pGate->pPins;     }
 Mio_Library_t *   Mio_GateReadLib      ( Mio_Gate_t * pGate )            { return pGate->pLib;      }

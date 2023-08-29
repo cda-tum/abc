@@ -398,7 +398,7 @@ extern float             Map_CutGetAreaRefed( Map_Cut_t * pCut, int fPhase );
 extern float             Map_CutGetAreaDerefed( Map_Cut_t * pCut, int fPhase );
 extern float             Map_CutGetPowerRefed( Map_Cut_t * pCut, int fPhase );
 extern float             Map_CutGetPowerDerefed( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase );
-extern float             Map_CutGetPowerFlow( Map_Cut_t * pCut, int fPhase );
+extern float             Map_CutGetPowerFlow( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase );
 extern float             Map_CutRef( Map_Cut_t * pCut, int fPhase, int fProfile );
 extern float             Map_CutDeref( Map_Cut_t * pCut, int fPhase, int fProfile );
 extern float             Map_PowerCutRef( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, int fProfile );

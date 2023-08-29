@@ -225,17 +225,31 @@ float Map_CutGetAreaFlow( Map_Cut_t * pCut, int fPhase )
   seealso     []
 
 ***********************************************************************/
-float Map_CutGetPowerFlow( Map_Cut_t * pCut, int fPhase )
+float Map_CutGetPowerFlow(  Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase )
 {
     Map_Match_t * pM = pCut->M + fPhase;
     Map_Super_t * pSuper = pM->pSuperBest;
+    Map_Node_t * pNodeChild;
     unsigned uPhaseTot = pM->uPhaseBest;
     Map_Cut_t * pCutFanin;
-    float aFlowRes, aFlowFanin, nRefs;
+    float aFlowRes, aFlowFanin, nRefs, aSwitchActivityInt = 1;
     int i, fPinPhasePos;
 
-    // start the resulting power
-    aFlowRes = pSuper->PowerInt;
+    // start the power of this cut
+    // net switching power of the root gate
+    aFlowRes = pSuper->PowerSwi * pNode->Switching;
+
+    // Add cell internal power (dependent on internal power of the root gate and the switching activity seen at the input pins)
+    // Use Formula: aSwitchingInternal = powerInt ( 1 - pNode->Switching ) * ( 1 - ( 1 - pNodeChild1->Switching ) * ( pNodeChild2->Switching ) )
+
+    for ( i = 0; i < pCut->nLeaves; i++ )
+    {
+        pNodeChild  = pCut->ppLeaves[i];
+        // For cell internal switching: Calculate the probability of no child node switching
+        aSwitchActivityInt *= 1 - pNodeChild->Switching;
+    }
+
+    aFlowRes += pSuper->PowerInt * ( 1 - pNode->Switching ) * ( 1 - aSwitchActivityInt );
     // iterate through the leaves
     for ( i = 0; i < pCut->nLeaves; i++ )
     {
@@ -385,7 +399,7 @@ float Map_PowerCutRefDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, in
 {
     Map_Node_t * pNodeChild;
     Map_Cut_t * pCutChild;
-    float aPower, aSwitchActivity;
+    float aPower, aSwitchActivity, aSwitchActivityInt = 1;
     int i, fPhaseChild;
 //    int nRefs;
     // start switching activity for the node
@@ -396,6 +410,19 @@ float Map_PowerCutRefDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, in
     // start the power of this cut
     // net switching power of the root gate
     aPower = Map_CutGetRootPowerSwi( pCut, fPhase ) * aSwitchActivity;
+
+    // Add cell internal power (dependent on internal power of the root gate and the switching activity seen at the input pins)
+    // Use Formula: aSwitchingInternal = powerInt ( 1 - pNode->Switching ) * ( 1 - ( 1 - pNodeChild1->Switching ) * ( pNodeChild2->Switching ) )
+
+    for ( i = 0; i < pCut->nLeaves; i++ )
+    {
+        pNodeChild  = pCut->ppLeaves[i];
+        // For cell internal switching: Calculate the probability of no child node switching
+        aSwitchActivityInt *= 1 - pNodeChild->Switching;
+    }
+
+    aPower += Map_CutGetRootPowerInt( pCut, fPhase ) * ( 1 - aSwitchActivity ) * ( 1 - aSwitchActivityInt );
+
     if ( fUpdateProf )
     {
         if ( fReference )
@@ -409,12 +436,7 @@ float Map_PowerCutRefDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, in
         pNodeChild  = pCut->ppLeaves[i];
         fPhaseChild = Map_CutGetLeafPhase( pCut, fPhase, i );
 
-        // Add cell internal power (dependent on internal power of the root gate and the switching activity seen at the input pins)
-        //
-        aPower += Map_CutGetRootPowerInt( pCut, fPhase ) * pNodeChild->Switching;
-
         //Add Power dependent on Phase
-
         if ( fReference )
         {
             if ( pNodeChild->pCutBest[0] && pNodeChild->pCutBest[1] ) // both phases are present
@@ -467,8 +489,6 @@ float Map_PowerCutRefDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, in
             fPhaseChild = !fPhaseChild;
             pCutChild   = pNodeChild->pCutBest[fPhaseChild];
         }
-
-
 
         // reference and compute power recursively
         aPower += Map_PowerCutRefDeref( pNodeChild, pCutChild, fPhaseChild, fReference, fUpdateProf );
@@ -749,9 +769,9 @@ float Map_MappingGetArea( Map_Man_t * pMan )
 ***********************************************************************/
 float Map_MappingGetPower( Map_Man_t * pMan )
 {
-    Map_Node_t * pNode;
-    float Power = 0.0;
-    int i;
+    Map_Node_t * pNode, * pNodeChild;
+    float Power = 0.0, aSwitchActivityInt = 1.0;
+    int i, j;
     if ( pMan->fUseProfile )
         Mio_LibraryCleanProfile2( pMan->pSuperLib->pGenlib );
     for ( i = 0; i < pMan->vMapObjs->nSize; i++ )
@@ -771,14 +791,30 @@ float Map_MappingGetPower( Map_Man_t * pMan )
             // count power of the negative phase
             if ( pNode->pCutBest[0] && (pNode->nRefAct[0] > 0 || pNode->pCutBest[1] == NULL) )
             {
-                Power += pNode->pCutBest[0]->M[0].pSuperBest->PowerInt;
+                Power += pNode->pCutBest[0]->M[0].pSuperBest->PowerSwi * pNode->Switching;
+                for ( j = 0; j < pNode->pCutBest[0]->nLeaves; j++ )
+                {
+                    pNodeChild  = pNode->pCutBest[0]->ppLeaves[j];
+                    // For cell internal switching: Calculate the probability of no child node switching
+                    aSwitchActivityInt *= 1 - pNodeChild->Switching;
+                }
+                Power += pNode->pCutBest[0]->M[0].pSuperBest->PowerInt * ( 1 - pNode->Switching ) * ( 1 - aSwitchActivityInt );
+
                 if ( pMan->fUseProfile )
                     Mio_GateIncProfile2( pNode->pCutBest[0]->M[0].pSuperBest->pRoot );
             }
             // count power of the positive phase
             if ( pNode->pCutBest[1] && (pNode->nRefAct[1] > 0 || pNode->pCutBest[0] == NULL) )
             {
-                Power += pNode->pCutBest[1]->M[1].pSuperBest->PowerInt;
+                Power += pNode->pCutBest[1]->M[1].pSuperBest->PowerSwi * pNode->Switching;
+                for ( j = 0; j < pNode->pCutBest[1]->nLeaves; j++ )
+                {
+                    pNodeChild  = pNode->pCutBest[1]->ppLeaves[j];
+                    // For cell internal switching: Calculate the probability of no child node switching
+                    aSwitchActivityInt *= 1 - pNodeChild->Switching;
+                }
+                Power += pNode->pCutBest[1]->M[1].pSuperBest->PowerInt * ( 1 - pNode->Switching ) * ( 1 - aSwitchActivityInt );
+
                 if ( pMan->fUseProfile )
                     Mio_GateIncProfile2( pNode->pCutBest[1]->M[1].pSuperBest->pRoot );
             }
@@ -786,12 +822,12 @@ float Map_MappingGetPower( Map_Man_t * pMan )
         // count power of the inverter if we need to implement one phase with another phase
         if ( (pNode->pCutBest[0] == NULL && pNode->nRefAct[0] > 0) ||
              (pNode->pCutBest[1] == NULL && pNode->nRefAct[1] > 0) )
-            Power += pMan->pSuperLib->PowerInv;
+            Power += pMan->pSuperLib->PowerInv * pNode->Switching;
     }
     // add buffers for each CO driven by a CI
     for ( i = 0; i < pMan->nOutputs; i++ )
         if ( Map_NodeIsVar(pMan->pOutputs[i]) && !Map_IsComplement(pMan->pOutputs[i]) )
-            Power += pMan->pSuperLib->PowerBuf;
+            Power += pMan->pSuperLib->PowerBuf * pNode->Switching;
     return Power;
 }
 

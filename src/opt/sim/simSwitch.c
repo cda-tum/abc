@@ -58,8 +58,6 @@ Vec_Int_t * Sim_NtkComputeSwitching( Abc_Ntk_t * pNtk, int nPatterns )
     Abc_Obj_t * pNode;
     unsigned * pSimInfo;
     int nSimWords, i;
-    float output = 0;
-
     // allocate space for simulation info of all nodes
     nSimWords = SIM_NUM_WORDS(nPatterns);
     vSimInfo = Sim_UtilInfoAlloc( Abc_NtkObjNumMax(pNtk), nSimWords, 0 );
@@ -79,7 +77,6 @@ Vec_Int_t * Sim_NtkComputeSwitching( Abc_Ntk_t * pNtk, int nPatterns )
         pSimInfo = (unsigned *)Vec_PtrEntry(vSimInfo, pNode->Id);
         Sim_UtilSimulateNodeOne( pNode, vSimInfo, nSimWords, 0 );
         pSwitching[pNode->Id] = Sim_ComputeSwitching( pSimInfo, nSimWords );
-        output = pSwitching[pNode->Id];
     }
     Vec_PtrFree( vNodes );
     Sim_UtilInfoFree( vSimInfo );
