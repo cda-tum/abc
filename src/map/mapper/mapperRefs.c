@@ -420,8 +420,9 @@ float Map_PowerCutRefDeref( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase, in
         // For cell internal switching: Calculate the probability of no child node switching
         aSwitchActivityInt *= 1 - pNodeChild->Switching;
     }
-
-    aPower += Map_CutGetRootPowerInt( pCut, fPhase ) * ( 1 - aSwitchActivity ) * ( 1 - aSwitchActivityInt );
+    // Use Formula: Switching Internal = 1 - P(output switching) - P(no child node switching)
+    aSwitchActivityInt = ( 1 - aSwitchActivity - aSwitchActivityInt );
+    aPower += Map_CutGetRootPowerInt( pCut, fPhase ) * aSwitchActivityInt;
 
     if ( fUpdateProf )
     {
@@ -786,6 +787,7 @@ float Map_MappingGetPower( Map_Man_t * pMan )
         // at least one phase is used in the mapping
         assert( pNode->nRefAct[0] > 0 || pNode->nRefAct[1] > 0 );
         // compute the array due to the supergate
+        aSwitchActivityInt = 1.0;
         if ( Map_NodeIsAnd(pNode) )
         {
             // count power of the negative phase
@@ -798,7 +800,9 @@ float Map_MappingGetPower( Map_Man_t * pMan )
                     // For cell internal switching: Calculate the probability of no child node switching
                     aSwitchActivityInt *= 1 - pNodeChild->Switching;
                 }
-                Power += pNode->pCutBest[0]->M[0].pSuperBest->PowerInt * ( 1 - pNode->Switching ) * ( 1 - aSwitchActivityInt );
+                // Use Formula: Switching Internal = 1 - P(output switching) - P(no child node switching)
+                aSwitchActivityInt = 1 - pNode->Switching - aSwitchActivityInt;
+                Power += pNode->pCutBest[0]->M[0].pSuperBest->PowerInt * aSwitchActivityInt;
 
                 if ( pMan->fUseProfile )
                     Mio_GateIncProfile2( pNode->pCutBest[0]->M[0].pSuperBest->pRoot );
@@ -813,7 +817,9 @@ float Map_MappingGetPower( Map_Man_t * pMan )
                     // For cell internal switching: Calculate the probability of no child node switching
                     aSwitchActivityInt *= 1 - pNodeChild->Switching;
                 }
-                Power += pNode->pCutBest[1]->M[1].pSuperBest->PowerInt * ( 1 - pNode->Switching ) * ( 1 - aSwitchActivityInt );
+                // Use Formula: Switching Internal = 1 - P(output switching) - P(no child node switching)
+                aSwitchActivityInt = 1 - pNode->Switching - aSwitchActivityInt;
+                Power += pNode->pCutBest[0]->M[0].pSuperBest->PowerInt * aSwitchActivityInt;
 
                 if ( pMan->fUseProfile )
                     Mio_GateIncProfile2( pNode->pCutBest[1]->M[1].pSuperBest->pRoot );
