@@ -18,6 +18,8 @@
 
 ***********************************************************************/
 
+#include <fcntl.h>
+#include <unistd.h>
 #include "base/abc/abc.h"
 #include "sim.h"
 
@@ -413,6 +415,92 @@ int Sim_UtilCountOnes( unsigned * pSimInfo, int nSimWords )
 
 /**Function*************************************************************
 
+  Synopsis    [Counts the number of transitions 0->1 or 1->0 in the bitstring.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+
+int Sim_UtilCountTransitions( unsigned * pSimInfo, int nSimWords )
+{
+    int nTransitions=0, nBits = 0;
+    int k, bitIndex;
+    unsigned lastBit;
+    unsigned currentWord;
+
+    srand(time(NULL)); // Seed the random number generator
+
+    for ( k = 0; k < nSimWords; k++ )
+    {
+        currentWord = pSimInfo[k];
+        lastBit = (currentWord >> (rand() % 32)) & 1;  // Generate a random starting bit
+
+        for(bitIndex=31; bitIndex >= 0; bitIndex--)
+        {
+            ++nBits;
+            if(((currentWord >> bitIndex) & 1) != lastBit)
+            {
+                nTransitions++;
+                lastBit = !lastBit;
+            }
+        }
+    }
+    return nTransitions;
+}
+
+/**Function*************************************************************
+
+  Synopsis    [Counts the number of transitions 0->1 or 1->0 in the bitstring.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+
+int Sim_UtilCountCellIntTransitions( unsigned * pSimInfo, unsigned * pSimInfo1, unsigned * pSimInfo2, int nSimWords )
+{
+    int nTransitions=0, nBits = 0;
+    int k, bitIndex;
+    unsigned lastBit, lastBit1, lastBit2;
+    unsigned currentWord, currentWord1, currentWord2;
+
+    srand(time(NULL)); // Seed the random number generator
+
+    for (k = 0; k < nSimWords; k++)
+    {
+        currentWord = pSimInfo[k];
+        currentWord1 = pSimInfo1[k];
+        currentWord2 = pSimInfo2[k];
+        lastBit = (currentWord >> (rand() % 32)) & 1;  // Generate a random starting bit
+        lastBit1 = (currentWord1 >> (rand() % 32)) & 1;
+        lastBit2 = (currentWord2 >> (rand() % 32)) & 1;
+
+        for(bitIndex=31; bitIndex >= 0; bitIndex--)
+        {
+            ++nBits;
+            if((((currentWord1 >> bitIndex) & 1) != lastBit1 || ((currentWord2 >> bitIndex) & 1) != lastBit2) && ((currentWord >> bitIndex) & 1) == lastBit)
+            {
+                nTransitions++;
+            }
+
+            lastBit = (currentWord >> bitIndex) & 1;
+            lastBit1 = (currentWord1 >> bitIndex) & 1;
+            lastBit2 = (currentWord2 >> bitIndex) & 1;
+        }
+    }
+
+    return nTransitions;
+}
+
+/**Function*************************************************************
+
   Synopsis    [Counts the number of 1's in the bitstring.]
 
   Description []
@@ -438,6 +526,41 @@ Vec_Int_t * Sim_UtilCountOnesArray( Vec_Ptr_t * vInfo, int nSimWords )
   Synopsis    [Returns random patterns.]
 
   Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+unsigned int Sim_UtilGetRandomUInt( )
+{
+    // Open /dev/urandom for reading
+    int urandom_fd = open("/dev/urandom", O_RDONLY);
+    if (urandom_fd == -1) {
+        perror("Failed to open /dev/urandom");
+        return 1;
+    }
+
+    // Read a random number (4 bytes in this example)
+    unsigned int random_number;
+    ssize_t bytes_read = read(urandom_fd, &random_number, sizeof(random_number));
+    if (bytes_read != sizeof(random_number)) {
+        perror("Failed to read random number");
+        close(urandom_fd);
+        return 1;
+    }
+
+    // Close /dev/urandom
+    close(urandom_fd);
+
+    return random_number;
+}
+
+/**Function*************************************************************
+
+  Synopsis    [Returns random patterns.]
+
+  Description []
                
   SideEffects []
 
@@ -448,7 +571,41 @@ void Sim_UtilSetRandom( unsigned * pPatRand, int nSimWords )
 {
     int k;
     for ( k = 0; k < nSimWords; k++ )
-        pPatRand[k] = SIM_RANDOM_UNSIGNED;
+        pPatRand[k] = Sim_UtilGetRandomUInt();
+}
+
+/**Function*************************************************************
+
+  Synopsis    [Returns biased patterns.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+void Sim_UtilSetBiased( unsigned * pPatRand, int nSimWords )
+{
+    int k;
+    int bitIndex;
+    unsigned int currentWord = 0;
+    unsigned int lastBit = 0; // start with 0, but it could also be 1
+
+    for ( k = 0; k < nSimWords; k++ )
+    {
+        for ( bitIndex = 0; bitIndex < 32; bitIndex++ )
+        {
+            if ((double)rand() / RAND_MAX < 0.1) // Flip with 10% chance
+                lastBit = 1 - lastBit; // flips the bit from 0 to 1 or 1 to 0
+
+            // append the bit to currentWord
+            currentWord = (currentWord << 1) | lastBit;
+        }
+
+        pPatRand[k] = currentWord;
+        currentWord = 0;
+    }
 }
 
 /**Function*************************************************************

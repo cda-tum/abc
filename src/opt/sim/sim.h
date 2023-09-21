@@ -212,8 +212,11 @@ extern void            Sim_UtilSimulateNodeOne( Abc_Obj_t * pNode, Vec_Ptr_t * v
 extern void            Sim_UtilTransferNodeOne( Abc_Obj_t * pNode, Vec_Ptr_t * vSimInfo, int nSimWords, int nOffset, int fShift );
 extern int             Sim_UtilCountSuppSizes( Sim_Man_t * p, int fStruct );
 extern int             Sim_UtilCountOnes( unsigned * pSimInfo, int nSimWords );
+extern int             Sim_UtilCountTransitions( unsigned * pSimInfo, int nSimWords );
+extern int             Sim_UtilCountCellIntTransitions( unsigned * pSimInfo, unsigned * pSimInfo1, unsigned * pSimInfo2, int nSimWords );
 extern Vec_Int_t *     Sim_UtilCountOnesArray( Vec_Ptr_t * vInfo, int nSimWords );
 extern void            Sim_UtilSetRandom( unsigned * pPatRand, int nSimWords );
+extern void            Sim_UtilSetBiased( unsigned * pPatRand, int nSimWords );
 extern void            Sim_UtilSetCompl( unsigned * pPatRand, int nSimWords );
 extern void            Sim_UtilSetConst( unsigned * pPatRand, int nSimWords, int fConst1 );
 extern int             Sim_UtilInfoIsEqual( unsigned * pPats1, unsigned * pPats2, int nSimWords );
