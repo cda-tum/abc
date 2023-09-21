@@ -55,6 +55,8 @@ Vec_Int_t * Sim_NtkComputeSwitching( Abc_Ntk_t * pNtk, int nPatterns )
 {
     Vec_Int_t * vSwitching;
     float * pSwitching;
+    Vec_Int_t * vIntSwitching;
+    float * pIntSwitching;
     Vec_Ptr_t * vNodes;
     Vec_Ptr_t * vSimInfo;
     Abc_Obj_t * pNode;
@@ -68,6 +70,8 @@ Vec_Int_t * Sim_NtkComputeSwitching( Abc_Ntk_t * pNtk, int nPatterns )
     // assign the random simulation to the CIs
     vSwitching = Vec_IntStart( Abc_NtkObjNumMax(pNtk) );
     pSwitching = (float *)vSwitching->pArray;
+    vIntSwitching = Vec_IntStart( Abc_NtkObjNumMax(pNtk) );
+    pIntSwitching = (float *)vIntSwitching->pArray;
     Abc_NtkForEachCi( pNtk, pNode, i )
     {
         //printf("I\n");
@@ -91,9 +95,11 @@ Vec_Int_t * Sim_NtkComputeSwitching( Abc_Ntk_t * pNtk, int nPatterns )
         //printf("N\n");
         pSimInfo = (unsigned *)Vec_PtrEntry(vSimInfo, pNode->Id);
         Sim_UtilSimulateNodeOne( pNode, vSimInfo, nSimWords, 0 );
-        pSwitching[pNode->Id] = Sim_ComputeSwitchingT( pNode, vSimInfo, nSimWords );
-        output = pSwitching[pNode->Id];
-        printf("Transitions%f\n", output);
+        pIntSwitching[pNode->Id] = Sim_ComputeSwitchingT( pNode, vSimInfo, nSimWords );
+        output = (pSwitching[Abc_ObjFaninId1(pNode)] - pSwitching[Abc_ObjFaninId0(pNode)]) / pSwitching[Abc_ObjFaninId1(pNode)];
+        printf("Percentage Diff %f\n", output*100);
+        output = pIntSwitching[pNode->Id];
+        printf("Transitions %f\n", output);
         pSwitching[pNode->Id] = Sim_ComputeSwitching( pSimInfo, nSimWords );
         output = pSwitching[pNode->Id];
         printf("Switching %f\n", output);
