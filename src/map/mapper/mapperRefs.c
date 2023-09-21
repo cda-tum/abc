@@ -819,7 +819,7 @@ float Map_MappingGetPower( Map_Man_t * pMan )
                 }
                 // Use Formula: Switching Internal = 1 - P(output switching) - P(no child node switching)
                 aSwitchActivityInt = 1 - pNode->Switching - aSwitchActivityInt;
-                Power += pNode->pCutBest[0]->M[0].pSuperBest->PowerInt * aSwitchActivityInt;
+                Power += pNode->pCutBest[1]->M[1].pSuperBest->PowerInt * aSwitchActivityInt;
 
                 if ( pMan->fUseProfile )
                     Mio_GateIncProfile2( pNode->pCutBest[1]->M[1].pSuperBest->pRoot );
