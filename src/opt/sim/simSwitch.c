@@ -62,7 +62,7 @@ Vec_Int_t * Sim_NtkComputeSwitching( Abc_Ntk_t * pNtk, int nPatterns )
     Abc_Obj_t * pNode;
     unsigned * pSimInfo;
     int nSimWords, i;
-    float output = 0;
+    float output = 0, out_count = 0;
 
     // allocate space for simulation info of all nodes
     nSimWords = SIM_NUM_WORDS(nPatterns);
@@ -76,6 +76,7 @@ Vec_Int_t * Sim_NtkComputeSwitching( Abc_Ntk_t * pNtk, int nPatterns )
     {
         //printf("I\n");
         pSimInfo = (unsigned *)Vec_PtrEntry(vSimInfo, pNode->Id);
+        //printf("ID: %i\n", pNode->Id);
         /*if(pNode->Id == 1)
         {
             Sim_UtilSetBiased( pSimInfo, nSimWords );
@@ -96,14 +97,23 @@ Vec_Int_t * Sim_NtkComputeSwitching( Abc_Ntk_t * pNtk, int nPatterns )
         pSimInfo = (unsigned *)Vec_PtrEntry(vSimInfo, pNode->Id);
         Sim_UtilSimulateNodeOne( pNode, vSimInfo, nSimWords, 0 );
         pIntSwitching[pNode->Id] = Sim_ComputeSwitchingT( pNode, vSimInfo, nSimWords );
-        output = (pSwitching[Abc_ObjFaninId1(pNode)] - pSwitching[Abc_ObjFaninId0(pNode)]) / pSwitching[Abc_ObjFaninId1(pNode)];
-        printf("Percentage Diff %f\n", output*100);
+        output = (pSwitching[Abc_ObjFaninId1(pNode)] - pSwitching[Abc_ObjFaninId0(pNode)]);
+        /*if(  fabs(output) > 0.45 )
+        {
+            out_count++;
+            printf("ID: %i\n", Abc_ObjFaninId0(pNode));
+            printf("F1: %f\n", pSwitching[Abc_ObjFaninId0(pNode)]);
+            printf("ID: %i\n", Abc_ObjFaninId1(pNode));
+            printf("F2: %f\n", pSwitching[Abc_ObjFaninId1(pNode)]);
+        }*/
+        //printf("Percentage Diff %f\n", output*100);
         output = pIntSwitching[pNode->Id];
-        printf("Transitions %f\n", output);
+        //printf("Transitions %f\n", output);
         pSwitching[pNode->Id] = Sim_ComputeSwitching( pSimInfo, nSimWords );
         output = pSwitching[pNode->Id];
-        printf("Switching %f\n", output);
+        //printf("Switching %f\n", output);
     }
+    //printf("OC: %f\n", out_count);
     Vec_PtrFree( vNodes );
     Sim_UtilInfoFree( vSimInfo );
     return vSwitching;
