@@ -98,13 +98,17 @@ Vec_Int_t * Sim_NtkComputeSwitching( Abc_Ntk_t * pNtk, int nPatterns )
         Sim_UtilSimulateNodeOne( pNode, vSimInfo, nSimWords, 0 );
         pIntSwitching[pNode->Id] = Sim_ComputeSwitchingT( pNode, vSimInfo, nSimWords );
         output = (pSwitching[Abc_ObjFaninId1(pNode)] - pSwitching[Abc_ObjFaninId0(pNode)]);
-        /*if(  fabs(output) > 0.45 )
+        Abc_Obj_t * pNodeIn0 = Abc_ObjFanin0(pNode);
+        Abc_Obj_t * pNodeIn1 = Abc_ObjFanin1(pNode);
+        /*if(  fabs(output) > 0.45 && pNodeIn0->Level != 0 && pNodeIn1->Level != 0 && abs(pNodeIn0->Level - pNodeIn1->Level) > 3 )
         {
             out_count++;
             printf("ID: %i\n", Abc_ObjFaninId0(pNode));
             printf("F1: %f\n", pSwitching[Abc_ObjFaninId0(pNode)]);
+            printf("Lv0: %i\n", pNodeIn0->Level);
             printf("ID: %i\n", Abc_ObjFaninId1(pNode));
             printf("F2: %f\n", pSwitching[Abc_ObjFaninId1(pNode)]);
+            printf("Lv1: %i\n", pNodeIn1->Level);
         }*/
         //printf("Percentage Diff %f\n", output*100);
         output = pIntSwitching[pNode->Id];

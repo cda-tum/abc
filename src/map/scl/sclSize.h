@@ -583,6 +583,7 @@ extern void          Abc_SclMinsizePerform( SC_Lib * pLib, Abc_Ntk_t * p, int fU
 extern int           Abc_SclCountMinSize( SC_Lib * pLib, Abc_Ntk_t * p, int fUseMax );
 extern Vec_Int_t *   Abc_SclExtractBarBufs( Abc_Ntk_t * pNtk );
 extern void          Abc_SclInsertBarBufs( Abc_Ntk_t * pNtk, Vec_Int_t * vBufs );
+extern void          Abc_SclGatingPerform( SC_Lib * pLib, Abc_Ntk_t * p, int fUseMax, int fVerbose );
 
 
 ABC_NAMESPACE_HEADER_END

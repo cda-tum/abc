@@ -404,6 +404,7 @@ extern float             Map_PowerCutDeref( Map_Cut_t * pCut, int fPhase, int fP
 extern void              Map_MappingSetRefs( Map_Man_t * pMan );
 extern float             Map_MappingGetArea( Map_Man_t * pMan );
 extern float             Map_MappingGetPower( Map_Man_t * pMan );
+extern float             Map_MappingSearchForGating( Map_Man_t * pMan );
 /*=== mapperSwitch.c =============================================================*/
 extern float             Map_SwitchCutGetDerefed( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase );
 extern float             Map_SwitchCutRef( Map_Node_t * pNode, Map_Cut_t * pCut, int fPhase );

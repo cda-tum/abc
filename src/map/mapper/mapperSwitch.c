@@ -213,11 +213,8 @@ float Map_MappingGetSwitching( Map_Man_t * pMan )
              (pNode->pCutBest[1] == NULL && pNode->nRefAct[1] > 0) )
             Switch += pNode->Switching; // inverter switches the same as the node
     }
-    // add buffers for each CO driven by a CI
-    for ( i = 0; i < pMan->nOutputs; i++ )
-        if ( Map_NodeIsVar(pMan->pOutputs[i]) && !Map_IsComplement(pMan->pOutputs[i]) )
-            Switch += pMan->pOutputs[i]->Switching;
-    return Switch;
+
+    return 0;
 }
 
 ////////////////////////////////////////////////////////////////////////

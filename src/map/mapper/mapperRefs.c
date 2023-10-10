@@ -783,6 +783,65 @@ float Map_MappingGetPower( Map_Man_t * pMan )
     return Power;
 }
 
+/**Function*************************************************************
+
+  Synopsis    [Computes the power of mapping.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+float Map_MappingSearchForGating( Map_Man_t * pMan )
+{
+    Map_Node_t * pNode;
+    float Power = 0.0;
+    int i;
+    if ( pMan->fUseProfile )
+        Mio_LibraryCleanProfile2( pMan->pSuperLib->pGenlib );
+    for ( i = 0; i < pMan->vMapObjs->nSize; i++ )
+    {
+        pNode = pMan->vMapObjs->pArray[i];
+        if ( pNode->nRefAct[2] == 0 )
+            continue;
+        if ( Map_NodeIsBuf(pNode) )
+            continue;
+        // at least one phase has the best cut assigned
+        assert( pNode->pCutBest[0] != NULL || pNode->pCutBest[1] != NULL );
+        // at least one phase is used in the mapping
+        assert( pNode->nRefAct[0] > 0 || pNode->nRefAct[1] > 0 );
+        // compute the array due to the supergate
+        if ( Map_NodeIsAnd(pNode) )
+        {
+            // count power of the negative phase
+            if ( pNode->pCutBest[0] && (pNode->nRefAct[0] > 0 || pNode->pCutBest[1] == NULL) )
+            {
+                Power += pNode->pCutBest[0]->M[0].pSuperBest->Power;
+                if ( pMan->fUseProfile )
+                    Mio_GateIncProfile2( pNode->pCutBest[0]->M[0].pSuperBest->pRoot );
+            }
+            // count power of the positive phase
+            if ( pNode->pCutBest[1] && (pNode->nRefAct[1] > 0 || pNode->pCutBest[0] == NULL) )
+            {
+                Power += pNode->pCutBest[1]->M[1].pSuperBest->Power;
+                if ( pMan->fUseProfile )
+                    Mio_GateIncProfile2( pNode->pCutBest[1]->M[1].pSuperBest->pRoot );
+            }
+        }
+        // count power of the inverter if we need to implement one phase with another phase
+        if ( (pNode->pCutBest[0] == NULL && pNode->nRefAct[0] > 0) ||
+             (pNode->pCutBest[1] == NULL && pNode->nRefAct[1] > 0) )
+            Power += pMan->pSuperLib->PowerInv;
+    }
+    // add buffers for each CO driven by a CI
+    for ( i = 0; i < pMan->nOutputs; i++ )
+        if ( Map_NodeIsVar(pMan->pOutputs[i]) && !Map_IsComplement(pMan->pOutputs[i]) )
+            Power += pMan->pSuperLib->PowerBuf;
+    return Power;
+}
+
 ////////////////////////////////////////////////////////////////////////
 ///                       END OF FILE                                ///
 ////////////////////////////////////////////////////////////////////////
