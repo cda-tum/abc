@@ -303,7 +303,7 @@ ABC_PRT( "Time", p->timeMatch );
     //////////////////////////////////////////////////////////////////////
 
 
-
+    Map_MappingGetSwitchingDiff( p );
     // print the arrival times of the latest outputs
     if ( p->fVerbose )
         Map_MappingPrintOutputArrivals( p );

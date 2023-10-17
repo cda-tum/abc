@@ -848,12 +848,12 @@ float Map_MappingGetPower( Map_Man_t * pMan )
   SeeAlso     []
 
 ***********************************************************************/
-    /*ToDO(hienbenj): Calculate the DIfference of Switching activities at one gate
-     * Also see if gates with high differences in switching power are connected to each other*/
+    /*ToDO(hienbenj): get the net switching power of a gate and if it is high look at the fanins of its fanout gate*/
 float Map_MappingGetSwitchingDiff( Map_Man_t * pMan )
 {
+    Mio_Gate_t * Gate;
     Map_Node_t * pNode, * pNodeChild;
-    float Power = 0.0, aSwitchActivityInt = 1.0;
+    float Power = 0.0, aSwitchActivityInt = 1.0, PowerInt = 0.0, PowerSwi = 0.0;
     int i, j;
     if ( pMan->fUseProfile )
         Mio_LibraryCleanProfile2( pMan->pSuperLib->pGenlib );
@@ -875,7 +875,8 @@ float Map_MappingGetSwitchingDiff( Map_Man_t * pMan )
             // count power of the negative phase
             if ( pNode->pCutBest[0] && (pNode->nRefAct[0] > 0 || pNode->pCutBest[1] == NULL) )
             {
-                Power += pNode->pCutBest[0]->M[0].pSuperBest->PowerSwi * pNode->Switching;
+                PowerSwi = pNode->pCutBest[0]->M[0].pSuperBest->PowerSwi;
+                Power += PowerSwi * pNode->Switching;
                 for ( j = 0; j < pNode->pCutBest[0]->nLeaves; j++ )
                 {
                     pNodeChild  = pNode->pCutBest[0]->ppLeaves[j];
@@ -884,15 +885,23 @@ float Map_MappingGetSwitchingDiff( Map_Man_t * pMan )
                 }
                 // Use Formula: Switching Internal = 1 - P(output switching) - P(no child node switching)
                 aSwitchActivityInt = 1 - pNode->Switching - aSwitchActivityInt;
-                Power += pNode->pCutBest[0]->M[0].pSuperBest->PowerInt * aSwitchActivityInt;
+                PowerInt = pNode->pCutBest[0]->M[0].pSuperBest->PowerInt * aSwitchActivityInt;
+                Power += PowerInt;
 
                 if ( pMan->fUseProfile )
                     Mio_GateIncProfile2( pNode->pCutBest[0]->M[0].pSuperBest->pRoot );
+
+                if(PowerSwi > 0.5)
+                {
+                    Gate = pNode->pCutBest[0]->M[0].pSuperBest->pRoot;
+                    volatile int i = 0;
+                }
             }
             // count power of the positive phase
             if ( pNode->pCutBest[1] && (pNode->nRefAct[1] > 0 || pNode->pCutBest[0] == NULL) )
             {
-                Power += pNode->pCutBest[1]->M[1].pSuperBest->PowerSwi * pNode->Switching;
+                PowerSwi = pNode->pCutBest[1]->M[1].pSuperBest->PowerSwi;
+                Power += PowerSwi * pNode->Switching;
                 for ( j = 0; j < pNode->pCutBest[1]->nLeaves; j++ )
                 {
                     pNodeChild  = pNode->pCutBest[1]->ppLeaves[j];
@@ -901,10 +910,17 @@ float Map_MappingGetSwitchingDiff( Map_Man_t * pMan )
                 }
                 // Use Formula: Switching Internal = 1 - P(output switching) - P(no child node switching)
                 aSwitchActivityInt = 1 - pNode->Switching - aSwitchActivityInt;
-                Power += pNode->pCutBest[1]->M[1].pSuperBest->PowerInt * aSwitchActivityInt;
+                PowerInt = pNode->pCutBest[1]->M[1].pSuperBest->PowerInt * aSwitchActivityInt;
+                Power += PowerInt;
 
                 if ( pMan->fUseProfile )
                     Mio_GateIncProfile2( pNode->pCutBest[1]->M[1].pSuperBest->pRoot );
+
+                if(PowerSwi > 0.5)
+                {
+                    Gate = pNode->pCutBest[1]->M[1].pSuperBest->pRoot;
+                    volatile int i = 0;
+                }
             }
         }
     }
