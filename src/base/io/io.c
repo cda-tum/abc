@@ -51,6 +51,7 @@ static int IoCommandReadFins    ( Abc_Frame_t * pAbc, int argc, char **argv );
 static int IoCommandReadInit    ( Abc_Frame_t * pAbc, int argc, char **argv );
 static int IoCommandReadPla     ( Abc_Frame_t * pAbc, int argc, char **argv );
 static int IoCommandReadPlaMo   ( Abc_Frame_t * pAbc, int argc, char **argv );
+static int IoCommandReadSaif    ( Abc_Frame_t * pAbc, int argc, char **argv );
 static int IoCommandReadTruth   ( Abc_Frame_t * pAbc, int argc, char **argv );
 static int IoCommandReadVerilog ( Abc_Frame_t * pAbc, int argc, char **argv );
 static int IoCommandReadStatus  ( Abc_Frame_t * pAbc, int argc, char **argv );
@@ -123,6 +124,7 @@ void Io_Init( Abc_Frame_t * pAbc )
     Cmd_CommandAdd( pAbc, "I/O", "read_init",     IoCommandReadInit,     1 );
     Cmd_CommandAdd( pAbc, "I/O", "read_pla",      IoCommandReadPla,      1 );
     Cmd_CommandAdd( pAbc, "I/O", "read_plamo",    IoCommandReadPlaMo,    1 );
+    Cmd_CommandAdd( pAbc, "I/O", "read_saif",     IoCommandReadSaif,   0 );
     Cmd_CommandAdd( pAbc, "I/O", "read_truth",    IoCommandReadTruth,    1 );
     Cmd_CommandAdd( pAbc, "I/O", "read_verilog",  IoCommandReadVerilog,  1 );
     Cmd_CommandAdd( pAbc, "I/O", "read_status",   IoCommandReadStatus,   0 );
@@ -1099,6 +1101,76 @@ usage:
     fprintf( pAbc->Err, "\t         reads the network in multi-output PLA\n" );
     fprintf( pAbc->Err, "\t-m     : toggle dist-1 merge for cubes with identical outputs [default = %s]\n", fMerge? "yes":"no" );
     fprintf( pAbc->Err, "\t-v     : toggle printing verbose information [default = %s]\n", fVerbose? "yes":"no" );
+    fprintf( pAbc->Err, "\t-h     : prints the command summary\n" );
+    fprintf( pAbc->Err, "\tfile   : the name of a file to read\n" );
+    return 1;
+}
+
+/**Function*************************************************************
+
+  Synopsis    []
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+/*
+ * Todo(hien): Create a Io_ReadSaif function ind a new file.
+ * - Check for network: read from frame
+ * - Check that the read is successful
+ * - Check that the number of nodes in the saif file equals the number of nodes in the network
+ * - Check node names?
+ * */
+
+int IoCommandReadSaif( Abc_Frame_t * pAbc, int argc, char ** argv )
+{
+    char * pFileName;
+    FILE * pFile;
+    int c;
+    int test = 0;
+    float * pSwitching = NULL;
+    Vec_Int_t * vSwitching;
+
+    Extra_UtilGetoptReset();
+    while ( ( c = Extra_UtilGetopt( argc, argv, "th" ) ) != EOF )
+    {
+        switch ( c )
+        {
+            case 't':
+                test = 1;
+                break;
+            case 'h':
+                goto usage;
+            default:
+                goto usage;
+        }
+    }
+
+    if ( argc != globalUtilOptind + 1 )
+        goto usage;
+
+    // get the input file name
+    pFileName = argv[globalUtilOptind];
+    if ( (pFile = fopen( pFileName, "rb" )) == NULL )
+    {
+        fprintf( pAbc->Err, "Cannot open input file \"%s\". \n", pFileName );
+        return 1;
+    }
+    fclose( pFile );
+
+    Io_ReadSaif( pFileName );
+    //pSwitching = (float *)vSwitching->pArray;
+
+    //if ( pSwitching ) Vec_IntFree( vSwitching );
+
+    return 0;
+
+    usage:
+    fprintf( pAbc->Err, "usage: read_saif [-h] <file>\n" );
+    fprintf( pAbc->Err, "\t         reads verification log file\n" );
     fprintf( pAbc->Err, "\t-h     : prints the command summary\n" );
     fprintf( pAbc->Err, "\tfile   : the name of a file to read\n" );
     return 1;

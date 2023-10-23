@@ -631,6 +631,10 @@ SOURCE=.\src\base\io\ioReadPlaMo.c
 # End Source File
 # Begin Source File
 
+SOURCE=.\src\base\io\ioReadSaif.c
+# End Source File
+# Begin Source File
+
 SOURCE=.\src\base\io\ioReadVerilog.c
 # End Source File
 # Begin Source File
