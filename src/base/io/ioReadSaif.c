@@ -126,18 +126,8 @@ static inline int           Saif_ItemId( Saif_Tree_t * p, Saif_Item_t * pItem ) 
 int Saif_CountItems( char * pBeg, char * pEnd )
 {
     int Counter = 0;
-    for ( ; pBeg < pEnd - 2; pBeg++ )
-    {
-        if (*pBeg == '(')
-        {
-            if (strncmp(pBeg+1, "T0 ", 3) != 0 && strncmp(pBeg+1, "T1 ", 3) != 0 &&
-                strncmp(pBeg+1, "TX ", 3) != 0 && strncmp(pBeg+1, "TC ", 3) != 0 &&
-                strncmp(pBeg+1, "IG ", 3) != 0)
-            {
-                Counter++;
-            }
-        }
-    }
+    for ( ; pBeg < pEnd; pBeg++ )
+        Counter += (*pBeg == '(' );
     return Counter;
 }
 // removes C-style comments
@@ -336,7 +326,7 @@ static inline int           Saif_Compare( Saif_Tree_t * p, Saif_Pair_t Pair, cha
   SeeAlso     []
 
 ***********************************************************************/
-int Saif_BuildItem2( Saif_Tree_t * p, char ** ppPos, char * pEnd , int instance_field )
+/*int Saif_BuildItem2( Saif_Tree_t * p, char ** ppPos, char * pEnd , int instance_field )
 {
     Saif_Item_t * pItem;
     Saif_Pair_t Key, Head, Body;
@@ -397,8 +387,8 @@ int Saif_BuildItem2( Saif_Tree_t * p, char ** ppPos, char * pEnd , int instance_
             if (Saif_SkipEntry(ppPos, pEnd))
                 goto exit;
             Head.End = *ppPos - p->pContents;
-            /*if ( Saif_SkipSpaces( p, ppPos, pEnd, 0 ) )
-                goto exit;*/
+            *//*if ( Saif_SkipSpaces( p, ppPos, pEnd, 0 ) )
+                goto exit;*//*
             (*ppPos) += 1;
 
             char * test_string = Saif_ReadString(p, Head);
@@ -498,7 +488,7 @@ int Saif_BuildItem2( Saif_Tree_t * p, char ** ppPos, char * pEnd , int instance_
                  p->pFileName, p->nLines, Saif_ReadString(p, Key) );
     }
     return -1;
-}
+}*/
 
 /**Function*************************************************************
 
@@ -558,7 +548,7 @@ int Saif_BuildItem( Saif_Tree_t * p, char ** ppPos, char * pEnd )
         goto exit;
     pNext = *ppPos;
     // Only Design
-    /*if ( *pNext == ')' )
+    if ( *pNext == ')' )
     {
         *ppPos = pNext + 2;
         pItem = Saif_NewItem( p );
@@ -567,12 +557,12 @@ int Saif_BuildItem( Saif_Tree_t * p, char ** ppPos, char * pEnd )
         if ( pItem->Next == -1 )
             goto exit;
         return Saif_ItemId( p, pItem );
-    }*/
-    /*if (*pNext == '\"')
+    }
+    if (*pNext == '\"')
     {
         if ( Saif_SkipEntry( ppPos, pEnd ) )
             goto exit;
-    }*/
+    }
     Head.Beg = *ppPos - p->pContents;
     if ( Saif_SkipEntry( ppPos, pEnd ) )
         goto exit;
@@ -749,24 +739,19 @@ void Saif_Stop( Saif_Tree_t * p, int fVerbose )
 Saif_Tree_t * Saif_Parse( char * pFileName )
 {
     Saif_Tree_t * p;
-    int fVerbose = 0;
     char * pPos;
     if ( (p = Saif_Start(pFileName)) == NULL )
         return NULL;
     pPos = p->pContents;
     // Todo(hien): Check if comments are used in saif files
-    // Saif_WipeOutComments( p->pContents, p->pContents+p->nContents );
+    Saif_WipeOutComments( p->pContents, p->pContents+p->nContents );
     if ( (!Saif_BuildItem( p, &pPos, p->pContents + p->nContents )) == 0 )
     {
         if ( p->pError ) printf( "%s", p->pError );
         printf( "Parsing failed.  " );
         Abc_PrintTime( 1, "Parsing time", Abc_Clock() - p->clkStart );
     }
-    else if ( fVerbose )
-    {
-        printf( "Parsing finished successfully.  " );
-        Abc_PrintTime( 1, "Parsing time", Abc_Clock() - p->clkStart );
-    }
+
     return p;
 }
 
@@ -784,11 +769,10 @@ Vec_Int_t * Io_ReadSaif( char * pFileName )
     char * pPos;
 
     // A network has to be read im
-
-    if ( (p = Saif_Start(pFileName)) == NULL )
-        return NULL;
-    pPos = p->pContents;
+    //pPos = p->pContents;
     p = Saif_Parse( pFileName );
+    if ( p == NULL )
+        return NULL;
     Saif_Stop( p, 0 );
 
     // This function creates the
