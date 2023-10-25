@@ -6,15 +6,15 @@
 
   PackageName [Network and node package.]
 
-  Synopsis    [Computes switching activity of nodes in the ABC network.]
+  Synopsis    [Returns switching activity of nodes in the ABC network from SAIF file.]
 
   Author      [Benjamin Hien]
 
-  Affiliation [UC Berkeley]
+  Affiliation [TU Munich]
 
-  Date        [Ver. 1.0. Started - June 20, 2005.]
+  Date        [Ver. 1.0. Started - Oct 17, 2023.]
 
-  Revision    [$Id: simSwitch.c,v 1.00 2005/06/20 00:00:00 alanmi Exp $]
+  Revision    []
 
 ***********************************************************************/
 
@@ -32,11 +32,26 @@ struct Saif_Pin_t_
 {
     // switching information
     char *               pin_name;     // pin name
-    int                  t0;           // the time spent at logic '0'
-    int                  t1;           // the time spent at logic '1'
-    int                  tx;           // the time spent at logic 'X'
-    int                  tc;           // the number of total transitions ( '0'->'1' or '1'->'0' )
-    int                  ig;           // the number of "instantaneous glitches"
+    long                 t0;           // the time spent at logic '0'
+    long                 t1;           // the time spent at logic '1'
+    long                 tx;           // the time spent at logic 'X'
+    long                 tc;           // the number of total transitions ( '0'->'1' or '1'->'0' )
+    long                 ig;           // the number of "instantaneous glitches"
+};
+
+typedef struct Saif_Instance_t_        Saif_Instance_t;   // all reading info
+struct Saif_Instance_t_
+{
+    // general simulation info
+    char *               Name;         // the timescale used (e.g. fs)
+
+    // network instances
+    Vec_Ptr_t            vPins;           // NamedSet<Saif_Pin_t>
+    int                  n_inputs;        // -- 'pins[0 .. n_inputs-1]' are input pins
+    int                  n_outputs;       // -- 'pins[n_inputs .. n_inputs+n_outputs-1]' are output pins
+    int                  Id;              // instance ID
+    int                  Top_Id;          // connected instance  higher in hierarchy
+    Vec_Int_t            Sub_Id;          // connected instances lower in hierarchy
 };
 
 typedef struct Saif_SimInfo_t_        Saif_SimInfo_t;   // all reading info
@@ -44,12 +59,11 @@ struct Saif_SimInfo_t_
 {
     // general simulation info
     int                  Timescale;    // the timescale used (e.g. fs)
-    int                  Duration;     // the simulation duration in timescale units
+    long                 Duration;     // the simulation duration in timescale units
     int                  SimDur;       // the simulation duration in s ( timescale * duration )
 
     // network instances
-    Vec_Ptr_t *          vInstances;   // the line currently parsed
-    Vec_Ptr_t *          vInNames;     // the names of the instances
+    Vec_Ptr_t            vInstances;   // NamedSet<Saif_Instance_t>
 };
 
 typedef struct Saif_Pair_t_ Saif_Pair_t;
@@ -68,7 +82,6 @@ struct Saif_Item_t_
     Saif_Pair_t     Body;         // body part
     int             Next;         // next item in the list
     int             Child;        // first child item
-    int             nChildren;    // number of children
 };
 
 typedef struct Saif_Tree_t_ Saif_Tree_t;
@@ -121,7 +134,17 @@ struct Io_ReadSaif_t_
 
 ***********************************************************************/
 
-static inline int           Saif_ItemId( Saif_Tree_t * p, Saif_Item_t * pItem )                { return pItem - p->pItems;                                         }
+static inline Saif_Item_t *  Saif_Root( Saif_Tree_t * p )                                      { return p->pItems;                                                 }
+static inline Saif_Item_t *  Saif_Item( Saif_Tree_t * p, int v )                               { assert( v < p->nItems ); return v < 0 ? NULL : p->pItems + v;     }
+static inline int            Saif_Compare( Saif_Tree_t * p, Saif_Pair_t Pair, char * pStr )    { return strncmp( p->pContents+Pair.Beg, pStr, Pair.End-Pair.Beg ) || ((int)strlen(pStr) != Pair.End-Pair.Beg); }
+static inline void           Saif_PrintWord( FILE * pFile, Saif_Tree_t * p, Saif_Pair_t Pair )        { char * pBeg = p->pContents+Pair.Beg, * pEnd = p->pContents+Pair.End; while ( pBeg < pEnd ) fputc( *pBeg++, pFile ); }
+static inline void           Saif_PrintSpace( FILE * pFile, int nOffset )                             { int i; for ( i = 0; i < nOffset; i++ ) fputc(' ', pFile);         }
+static inline int            Saif_ItemId( Saif_Tree_t * p, Saif_Item_t * pItem )                     { return pItem - p->pItems;                                         }
+
+#define Saif_ItemForEachChild( p, pItem, pChild ) \
+    for ( pChild = Saif_Item(p, pItem->Child); pChild; pChild = Saif_Item(p, pChild->Next) )
+#define Saif_ItemForEachChildName( p, pItem, pChild, pName ) \
+    for ( pChild = Saif_Item(p, pItem->Child); pChild; pChild = Saif_Item(p, pChild->Next) ) if ( Saif_Compare(p, pChild->Key, pName) ) {} else
 
 int Saif_CountItems( char * pBeg, char * pEnd )
 {
@@ -312,9 +335,6 @@ char * Saif_ReadString( Saif_Tree_t * p, Saif_Pair_t Pair )
     Buffer[Pair.End-Pair.Beg] = 0;
     return Buffer;
 }
-
-static inline int           Saif_Compare( Saif_Tree_t * p, Saif_Pair_t Pair, char * pStr )     { return strncmp( p->pContents+Pair.Beg, pStr, Pair.End-Pair.Beg ) || ((int)strlen(pStr) != Pair.End-Pair.Beg); }
-
 /**Function*************************************************************
 
   Synopsis    [Returns free item.]
@@ -326,158 +346,77 @@ static inline int           Saif_Compare( Saif_Tree_t * p, Saif_Pair_t Pair, cha
   SeeAlso     []
 
 ***********************************************************************/
-/*int Saif_BuildItem2( Saif_Tree_t * p, char ** ppPos, char * pEnd , int instance_field )
-{
+int Saif_BuildItem2(Saif_Tree_t * p, char ** ppPos, char * pEnd ) {
     Saif_Item_t * pItem;
-    Saif_Pair_t Key, Head, Body;
-    char * pNext, * pPrev, * pStop;
-    // Skip spaces at the beginning
-    ////////////////////////////////////////// Keys: Begin /////////////////////////////////////////
-    Key.End = 0;
-    if ( Saif_SkipSpaces( p, ppPos, pEnd, 0 ) )
+    Saif_Pair_t Key, Body;
+    char * pNext, * pStop;
+
+    if (Saif_SkipSpaces(p, ppPos, pEnd, 0) == 1)
         return -2;
-    Key.Beg = *ppPos - p->pContents + 1; // every first character is a '('
-    if ( Saif_SkipEntry( ppPos, pEnd ) )
+
+    Key.Beg = *ppPos - p->pContents;
+    if (Saif_SkipEntry(ppPos, pEnd) == 1)
         goto exit;
+
     Key.End = *ppPos - p->pContents;
+    pStop = Saif_FindMatch(*ppPos, pEnd);
 
-    char* test_string = Saif_ReadString( p, Key);
-    printf( "Key " );
-    printf( test_string );
-    printf( "\n" );
-    ////////////////////////////////////////// Keys: End ///////////////////////////////////////////
+    Body.Beg = *ppPos - p->pContents + 1;
+    Body.End = pStop - p->pContents;
 
-    pNext = *ppPos;
-    pPrev = pNext - 1;
-
-    if (*pNext == '\n')
-    {
-
-        pItem = Saif_NewItem(p);
-        pItem->Key = Key;
-        //pItem->Head = Saif_UpdateHead( p, Head );
-        printf("Child ");
-        printf("\n");
-        pItem->Child = Saif_BuildItem2(p, ppPos, pEnd, 0);
-        if (pItem->Child == -1)
-            goto exit;
-        return Saif_ItemId(p, pItem);
-    }
-
-    if (*pNext == ' ')
-    {
-        Saif_SkipSpaces( p, ppPos, pEnd, 0 );
-        pNext = *ppPos;
-        if (*pNext == ')')
-        {
-            (*ppPos) += 1;
+    switch (**ppPos) {
+        case '\n':
             pItem = Saif_NewItem(p);
             pItem->Key = Key;
-            printf("Next1 ");
-            printf("\n");
-            //pItem->Head = Saif_UpdateHead( p, Head );
-            pItem->Next = Saif_BuildItem2(p, ppPos, pEnd, 0);
-            if (pItem->Next == -1)
-                goto exit;
+            pItem->Body = Body;
+            *ppPos += 1;
+            pItem->Child = Saif_BuildItem2(p, ppPos, pStop);
+            if (pItem->Child == -1) goto exit;
+            *ppPos = pStop + 1;
+            pItem->Next = Saif_BuildItem2(p, ppPos, pEnd);
+            if (pItem->Next == -1) goto exit;
             return Saif_ItemId(p, pItem);
-        }
-        if (*pNext == '\"')
-        {
-            Head.Beg = *ppPos - p->pContents;
-            if (Saif_SkipEntry(ppPos, pEnd))
-                goto exit;
-            Head.End = *ppPos - p->pContents;
-            *//*if ( Saif_SkipSpaces( p, ppPos, pEnd, 0 ) )
-                goto exit;*//*
-            (*ppPos) += 1;
 
-            char * test_string = Saif_ReadString(p, Head);
-
-            printf("Head ");
-            printf(test_string);
-            printf("\n");
+        case ')':
+            *ppPos += 2;
             pItem = Saif_NewItem(p);
-            printf("Next2 ");
-            printf("\n");
             pItem->Key = Key;
-            pItem->Head = Saif_UpdateHead(p, Head);
-            pItem->Next = Saif_BuildItem2(p, ppPos, pEnd, 0 );
+            pItem->Next = Saif_BuildItem2(p, ppPos, pEnd);
+            if (pItem->Next == -1) goto exit;
             return Saif_ItemId(p, pItem);
-        }
 
-        Head.Beg = *ppPos - p->pContents;
-        if (Saif_SkipEntry(ppPos, pEnd))
-            goto exit;
-        Head.End = *ppPos - p->pContents;
-        pNext = *ppPos;
-        pPrev = pNext - 1;
-        if (*pNext == ' ')
-        {
-            Saif_SkipSpaces(p, ppPos, pEnd, 0);
-            pNext = *ppPos;
-            if (*pNext == ')')
-            {
-                char * test_string = Saif_ReadString(p, Head);
-                printf("Head ");
-                printf(test_string);
-                printf("\n");
-                (*ppPos) += 1;
+        case '\"':
+            if (Saif_SkipEntry(ppPos, pEnd)) goto exit;
+            // Continue to default.
+
+        default:
+            *ppPos += 1;  // Skip the current character.
+            if (**ppPos == '\n') {
                 pItem = Saif_NewItem(p);
-                printf("Next3 ");
-                printf("\n");
+                Saif_Pair_t Head;
+                Head.Beg = *ppPos - p->pContents;
+                if (Saif_SkipEntry(ppPos, pEnd)) goto exit;
+                Head.End = *ppPos - p->pContents;
+                pItem->Head = Saif_UpdateHead(p, Head);
                 pItem->Key = Key;
-                pItem->Head = Saif_UpdateHead( p, Head );
-                pItem->Next = Saif_BuildItem2(p, ppPos, pEnd, 0);
-                if (pItem->Next == -1)
-                    goto exit;
+                pItem->Body = Body;
+                pItem->Child = Saif_BuildItem2(p, ppPos, pStop);
+                if (pItem->Child == -1) goto exit;
+                *ppPos = pStop + 1;
+                pItem->Next = Saif_BuildItem2(p, ppPos, pEnd);
+                if (pItem->Next == -1) goto exit;
                 return Saif_ItemId(p, pItem);
             }
-        }
-        // Also check previous for being a ')': If so were in the T field
-        if (*pNext == '\n' || *pNext == '(')
-        {
-            if (*pNext == '\n' && *pPrev != ')')
-            {
-                printf("HERE! ");
-                printf("\n");
-            }
-            Head.End -= 1;
-            char * test_string = Saif_ReadString(p, Head);
-            printf("Head ");
-            printf(test_string);
-            printf("\n");
+            if (Saif_SkipSpaces(p, ppPos, pEnd, 0))
+                goto exit;
+
             pItem = Saif_NewItem(p);
-            printf("Next4 ");
-            printf("\n");
-            pItem->Key = Key;
-            pItem->Head = Saif_UpdateHead(p, Head);
-            pItem->Next = Saif_BuildItem2(p, ppPos, pEnd, 0);
+            pItem->Key  = Key;
+            pItem->Body = Body;
+            pItem->Next = Saif_BuildItem2( p, ppPos, pEnd );
             if (pItem->Next == -1)
                 goto exit;
             return Saif_ItemId(p, pItem);
-        }
-        Body.Beg = *ppPos - p->pContents;
-        Saif_SkipEntry( ppPos, pEnd );
-        Body.End = *ppPos - p->pContents - 1;
-        pNext = *ppPos;
-        char * test_string = Saif_ReadString(p, Head);
-        printf("Head ");
-        printf(test_string);
-        printf("\n");
-        test_string = Saif_ReadString(p, Body);
-        printf("Body ");
-        printf(test_string);
-        printf("\n");
-        pItem = Saif_NewItem(p);
-        pItem->Key = Key;
-        printf("Next5 ");
-        printf("\n");
-        pItem->Head = Saif_UpdateHead(p, Head);
-        pItem->Body = Body;
-        pItem->Next = Saif_BuildItem2(p, ppPos, pEnd, 0);
-        if (pItem->Next == -1)
-            goto exit;
-        return Saif_ItemId(p, pItem);
     }
 
     exit:
@@ -485,10 +424,10 @@ static inline int           Saif_Compare( Saif_Tree_t * p, Saif_Pair_t Pair, cha
     {
         p->pError = ABC_ALLOC( char, 1000 );
         sprintf( p->pError, "File \"%s\". Line %6d. Failed to parse entry \"%s\".\n",
-                 p->pFileName, p->nLines, Saif_ReadString(p, Key) );
+                 p->pFileName, p->nLines, Saif_ReadString( p, Key) );
     }
     return -1;
-}*/
+}
 
 /**Function*************************************************************
 
@@ -673,18 +612,6 @@ char * Saif_FileContents( char * pFileName, int nContents )
     pContents[nContents] = 0;
     return pContents;
 }
-void Saif_StringDump( char * pFileName, Vec_Str_t * vStr )
-{
-    FILE * pFile = fopen( pFileName, "wb" );
-    int RetValue = 0;
-    if ( pFile == NULL )
-    {
-        printf( "Saif_StringDump(): The output file is unavailable.\n" );
-        return;
-    }
-    RetValue = fwrite( Vec_StrArray(vStr), 1, Vec_StrSize(vStr), pFile );
-    fclose( pFile );
-}
 
 /**Function*************************************************************
 
@@ -740,6 +667,7 @@ Saif_Tree_t * Saif_Parse( char * pFileName )
 {
     Saif_Tree_t * p;
     char * pPos;
+    // Allocate Memory Saif_Tree_t
     if ( (p = Saif_Start(pFileName)) == NULL )
         return NULL;
     pPos = p->pContents;
@@ -755,24 +683,202 @@ Saif_Tree_t * Saif_Parse( char * pFileName )
     return p;
 }
 
+static inline Saif_SimInfo_t * Abc_SaifAlloc()
+{
+    Saif_SimInfo_t * p;
+    p = ABC_CALLOC( Saif_SimInfo_t, 1 );
+    p->Timescale = -1;
+    p->Duration = -1;
+    p->SimDur = -1;
+    return p;
+}
+// This is needed for each vector to dynamically allocate memory
+static inline Saif_Instance_t * Abc_SaifInstanceAlloc()
+{
+    Saif_Instance_t * p;
+    p = ABC_CALLOC( Saif_Instance_t, 1 );
+    // p->Name = "";
+    p->n_inputs = -1;
+    p->n_outputs = -1;
+    p->Id = -1;
+    p->Top_Id = -1;
+    return p;
+}
+
+static inline Saif_Pin_t * Abc_SaifPinAlloc()
+{
+    Saif_Pin_t * p;
+    p = ABC_CALLOC( Saif_Pin_t, 1 );
+    // p->pin_name = "";
+    p->t0 = -1;
+    p->t1 = -1;
+    p->tx = -1;
+    p->tc = -1;
+    p->ig = -1;
+    return p;
+}
+
+#define Saif_ForEachInstance( p, pWL, i )       Vec_PtrForEachEntry( Saif_Instance_t *, &p->vInstances, pWL, i )
+#define Saif_ForEachPin( p, pWL, i )            Vec_PtrForEachEntry( Saif_Pin_t *, &p->vPins, pWL, i )
+
+static inline void Abc_SaifPinFree( Saif_Pin_t * p )
+{
+    free(p->pin_name);
+    ABC_FREE( p );
+}
+static inline void Abc_SaifInstanceFree( Saif_Instance_t * p )
+{
+    int i;
+    Saif_Pin_t * pPin;
+    free(p->Name);
+    // ID Vector needs to be erased
+    // p->Sub_Id;
+    Saif_ForEachPin( p, pPin, i )
+        Abc_SaifPinFree( pPin );
+    Vec_PtrErase( &p->vPins );
+    ABC_FREE( p );
+}
+static inline void Abc_SaifFree( Saif_SimInfo_t * p )
+{
+    int i;
+    Saif_Instance_t * pIns;
+    Saif_ForEachInstance( p, pIns, i )
+        Abc_SaifInstanceFree( pIns );
+    Vec_PtrErase( &p->vInstances );
+    ABC_FREE( p );
+}
+
+// Read out the switching activity information of each pin
+void Saif_ReadNetInfo( Saif_Tree_t * p, Saif_Item_t * pRootItem, Saif_Instance_t * pInstance )
+{
+    Saif_Item_t * pItemNet, * pItemPin, * pItemT;
+    // NET items
+    Saif_ItemForEachChildName( p, pRootItem, pItemNet, "NET" )
+    {
+        // Pin items
+        Saif_ItemForEachChild( p, pItemNet, pItemPin )
+        {
+            // Allocate Memory
+            Saif_Pin_t * pPin = Abc_SaifPinAlloc();
+            Vec_PtrPush( &pInstance->vPins, pPin );
+            // Write Name
+            pPin->pin_name = Abc_UtilStrsav( Saif_ReadString(p, pItemPin->Key) );
+            // Write T(ime) entries
+            long* pPinMembers[] = {&pPin->t0, &pPin->t1, &pPin->tx, &pPin->tc, &pPin->ig};
+            char* keys[] = {"T0", "T1", "TX", "TC", "IG"};
+            int size = sizeof(keys)/sizeof(keys[0]);
+            // T(ime) items
+            Saif_ItemForEachChild( p, pItemPin, pItemT )
+            {
+                for(int i=0; i<size; i++)
+                {
+                    if( !Saif_Compare(p, pItemT->Key, keys[i]) )
+                    {
+                        *pPinMembers[i] = atof(Saif_ReadString(p, pItemT->Body));
+                    }
+                }
+            }
+        }
+    }
+}
+// Gets as Input the top instance(s)
+// Iterates through all  the sub instances and reads out the switching activity information of each
+void Saif_ReadInstances( Saif_Tree_t * p, Saif_Item_t * pRootItem, Saif_SimInfo_t * vSimInf )
+{
+    Saif_Item_t * pItem;
+
+    // Iterate through the Instances
+    Saif_ItemForEachChildName( p, pRootItem, pItem, "INSTANCE" )
+    {
+        Saif_Instance_t * pInstance = Abc_SaifInstanceAlloc();
+        Vec_PtrPush( &vSimInf->vInstances, pInstance );
+
+        pInstance->Name = Abc_UtilStrsav(Saif_ReadString(p, pItem->Head));
+
+        Saif_ReadNetInfo ( p, pItem, pInstance );
+        Saif_ReadInstances( p, pItem, vSimInf );
+    }
+}
+
+int Saif_ReadTimescale( Saif_Tree_t * p )
+{
+    Saif_Item_t * pItem;
+    Saif_ItemForEachChildName( p, Saif_Root(p), pItem, "TIMESCALE" )
+    {
+        int unit_zeros[6] = {15, 12,9, 6, 3, 0};
+        char *units[6] = {"fs","ps","ns", "us", "ms", "s"};
+        char *token;
+        long number;
+        int number_zeros = 0;
+        char *unit = NULL;
+        char * timescale = Saif_ReadString(p, pItem->Body);
+
+        // Get the first token (number)
+        token = strtok(timescale, " ");
+        if (token != NULL) {
+            number = strtol(token, NULL, 10);
+            while (number != 0) {
+                number /= 10;
+                number_zeros++;
+            }
+            number_zeros--;
+        }
+
+        // Get the second token (unit)
+        token = strtok(NULL, " ");
+        if (token != NULL) {
+            for(int i = 0; i < 6; i++) {
+                if(strcmp(token, units[i]) == 0)
+                    return unit_zeros[i] - number_zeros;
+            }
+        }
+
+        return -1; // Return -1 in case of an unrecognized unit
+    }
+    printf( "Libery parser cannot read \"time_unit\".  Assuming   time_unit : \"1ns\".\n" );
+    return 9;
+}
+
+long Saif_ReadDuration( Saif_Tree_t * p )
+{
+    Saif_Item_t * pItem;
+    Saif_ItemForEachChildName( p, Saif_Root(p), pItem, "DURATION" )
+        return atol(Saif_ReadString(p, pItem->Body));
+    return 10000000000;
+}
+
+
+Saif_SimInfo_t * Saif_CreateInfo( Saif_Tree_t * p )
+{
+    // Allocate Memory
+    Saif_SimInfo_t * vSimInf;
+    vSimInf = Abc_SaifAlloc();
+
+    vSimInf->Timescale = Saif_ReadTimescale( p );
+    vSimInf->Duration = Saif_ReadDuration( p );
+    vSimInf->SimDur = 0; // adjust
+
+    Saif_ReadInstances( p,  Saif_Root(p), vSimInf );
+
+    return vSimInf;
+}
+
 Vec_Int_t * Io_ReadSaif( char * pFileName )
 {
-    Vec_Int_t * vSwitching;
-    float * pSwitching;
-    Vec_Ptr_t * vNodes;
-    Vec_Ptr_t * vSimInfo;
-    Abc_Obj_t * pNode;
-    unsigned * pSimInfo;
-    int nSimWords, i;
-
     Saif_Tree_t * p;
     char * pPos;
+
+    Saif_SimInfo_t * vSwitching;
 
     // A network has to be read im
     //pPos = p->pContents;
     p = Saif_Parse( pFileName );
     if ( p == NULL )
         return NULL;
+    vSwitching = Saif_CreateInfo( p );
+    // Free Memory Saif_SimInfo_t
+    Abc_SaifFree ( vSwitching );
+    // Free Memory Saif_Tree_t
     Saif_Stop( p, 0 );
 
     // This function creates the
@@ -784,3 +890,9 @@ Vec_Int_t * Io_ReadSaif( char * pFileName )
 
     return 0;
 }
+
+////////////////////////////////////////////////////////////////////////
+///                       END OF FILE                                ///
+////////////////////////////////////////////////////////////////////////
+
+
