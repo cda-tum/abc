@@ -47,8 +47,8 @@ struct Saif_Instance_t_
 
     // network instances
     Vec_Ptr_t            vPins;           // NamedSet<Saif_Pin_t>
-    int                  n_inputs;        // -- 'pins[0 .. n_inputs-1]' are input pins
-    int                  n_outputs;       // -- 'pins[n_inputs .. n_inputs+n_outputs-1]' are output pins
+    int                  n_inputs;        // -- 'pins[0 … n_inputs-1]' are input pins
+    int                  n_outputs;       // -- 'pins[n_inputs … n_inputs+n_outputs-1]' are output pins
     int                  Id;              // instance ID
     int                  Top_Id;          // connected instance  higher in hierarchy
     Vec_Int_t            Sub_Id;          // connected instances lower in hierarchy
@@ -781,9 +781,57 @@ void Saif_ReadNetInfo( Saif_Tree_t * p, Saif_Item_t * pRootItem, Saif_Instance_t
         }
     }
 }
+void InstanceHandling(Saif_Instance_t * pInstance, Saif_Item_t * pItem, Vec_Int_t * vTemp, Saif_Tree_t * p, int * iT, int * iC, Saif_SimInfo_t * vSimInf)
+{
+    // First Instance
+    if ( Vec_IntSize(vTemp) == 0 )
+    {
+        Vec_IntPush( vTemp, *iT );
+    }
+    else
+    {
+        pInstance->Top_Id =  Vec_IntEntry( vTemp, *iT );
+        if (pItem->Next < 0)
+        {
+            if (pItem->Child < 0)
+            {
+                (*iT)--;
+            }
+            else
+            {
+                if (Saif_Item(p, pItem->Child)->Next >= 0)
+                {
+                    (*iT)++;
+                    Vec_IntSetEntry( vTemp, *iT, *iC );
+                }
+                else
+                {
+                    (*iT)--;
+                }
+            }
+        }
+        else
+        {
+            if (pItem->Child >= 0)
+            {
+                if (Saif_Item(p, pItem->Child)->Next >= 0)
+                {
+                    (*iT)++;
+                    Vec_IntSetEntry( vTemp, *iT, *iC );
+                }
+            }
+        }
+    }
+    if( pInstance->Top_Id >= 0 )
+    {
+        Saif_Instance_t * TopInstance = Vec_PtrEntry(&vSimInf->vInstances, pInstance->Top_Id);
+        Vec_IntPush( &TopInstance->Sub_Id, *iC );
+    }
+    (*iC)++;
+}
 // Gets as Input the top instance(s)
 // Iterates through all  the sub instances and reads out the switching activity information of each
-void Saif_ReadInstances( Saif_Tree_t * p, Saif_Item_t * pRootItem, Saif_SimInfo_t * vSimInf )
+void Saif_ReadInstances( Saif_Tree_t * p, Saif_Item_t * pRootItem, Saif_SimInfo_t * vSimInf, Vec_Int_t * vTemp, int * iT, int * iC )
 {
     Saif_Item_t * pItem;
 
@@ -792,11 +840,14 @@ void Saif_ReadInstances( Saif_Tree_t * p, Saif_Item_t * pRootItem, Saif_SimInfo_
     {
         Saif_Instance_t * pInstance = Abc_SaifInstanceAlloc();
         Vec_PtrPush( &vSimInf->vInstances, pInstance );
-
+        // Assign the name
         pInstance->Name = Abc_UtilStrsav(Saif_ReadString(p, pItem->Head));
-
+        // Assign the incoming and outgoing instances
+        InstanceHandling(pInstance, pItem, vTemp, p, iT, iC, vSimInf);
+        // Read in the Net Info (Time information)
         Saif_ReadNetInfo ( p, pItem, pInstance );
-        Saif_ReadInstances( p, pItem, vSimInf );
+        // Recursive call
+        Saif_ReadInstances( p, pItem, vSimInf, vTemp, iT, iC );
     }
 }
 
@@ -852,13 +903,18 @@ Saif_SimInfo_t * Saif_CreateInfo( Saif_Tree_t * p )
 {
     // Allocate Memory
     Saif_SimInfo_t * vSimInf;
+    Vec_Int_t * vTemp;
+    int iT = 0, iC = 0;
     vSimInf = Abc_SaifAlloc();
+    vTemp = Vec_IntAlloc(10);
 
     vSimInf->Timescale = Saif_ReadTimescale( p );
     vSimInf->Duration = Saif_ReadDuration( p );
     vSimInf->SimDur = 0; // adjust
 
-    Saif_ReadInstances( p,  Saif_Root(p), vSimInf );
+    Saif_ReadInstances( p,  Saif_Root(p), vSimInf, vTemp, &iT, &iC );
+
+    Vec_IntFree( vTemp );
 
     return vSimInf;
 }
