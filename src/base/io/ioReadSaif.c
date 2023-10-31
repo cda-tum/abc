@@ -733,6 +733,7 @@ static inline void Abc_SaifInstanceFree( Saif_Instance_t * p )
     free(p->Name);
     // ID Vector needs to be erased
     // p->Sub_Id;
+    Vec_IntErase(&p->Sub_Id);
     Saif_ForEachPin( p, pPin, i )
         Abc_SaifPinFree( pPin );
     Vec_PtrErase( &p->vPins );
@@ -824,7 +825,7 @@ void InstanceHandling(Saif_Instance_t * pInstance, Saif_Item_t * pItem, Vec_Int_
     }
     if( pInstance->Top_Id >= 0 )
     {
-        Saif_Instance_t * TopInstance = Vec_PtrEntry(&vSimInf->vInstances, pInstance->Top_Id);
+        Saif_Instance_t * TopInstance = Vec_PtrEntry( &vSimInf->vInstances, pInstance->Top_Id );
         Vec_IntPush( &TopInstance->Sub_Id, *iC );
     }
     (*iC)++;
