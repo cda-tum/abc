@@ -23,6 +23,7 @@
 #include "aig/saig/saig.h"
 #include "proof/abs/abs.h"
 #include "sat/bmc/bmc.h"
+#include "misc/nm/nmInt.h"
 
 #ifdef WIN32
 #include <process.h> 
@@ -1127,6 +1128,7 @@ usage:
 
 int IoCommandReadSaif( Abc_Frame_t * pAbc, int argc, char ** argv )
 {
+    Abc_Ntk_t * pNtk;
     char * pFileName;
     FILE * pFile;
     int c;
@@ -1135,6 +1137,8 @@ int IoCommandReadSaif( Abc_Frame_t * pAbc, int argc, char ** argv )
     Vec_Int_t * vSwitching;
 
     Extra_UtilGetoptReset();
+    // flag: read as AIG or read as modules (blackbox)
+    // only AIG implemented so far since module switching information has no relevance in ABC (yet)
     while ( ( c = Extra_UtilGetopt( argc, argv, "th" ) ) != EOF )
     {
         switch ( c )
@@ -1161,7 +1165,37 @@ int IoCommandReadSaif( Abc_Frame_t * pAbc, int argc, char ** argv )
     }
     fclose( pFile );
 
+    /*ToDo: This is only for debugging - check names in Ntk to compare with module names in SAIF file*/
+    pNtk = Abc_FrameReadNtk(pAbc);
+    if ( pNtk == NULL )
+    {
+        Abc_Print( -1, "Empty network.\n" );
+        return 1;
+    }
+    Nm_Man_t * pMan = pNtk->pManName;
+    Nm_Entry_t * pEntry;
+    char * pName;
+    pEntry = Nm_ManTableLookupId( pMan, 5 );
+    pName = pEntry->Name;
+    pEntry = Nm_ManTableLookupId( pMan, 6 );
+    pName = pEntry->Name;
+    pEntry = Nm_ManTableLookupId( pMan, 7 );
+    pName = pEntry->Name;
+    pEntry = Nm_ManTableLookupId( pMan, 8 );
+    pName = pEntry->Name;
+    pEntry = Nm_ManTableLookupId( pMan, 9 );
+    pName = pEntry->Name;
+    pEntry = Nm_ManTableLookupId( pMan, 10 );
+    pName = pEntry->Name;
+    /*pMan = pNtk->pManName;
+    pEntry = pMan->pBinsN2I[ 1291 ];
+    pName = pEntry->Name;*/
+
+
     Io_ReadSaif( pFileName );
+
+    /*Abc_FrameReplaceCurrentNetwork( pAbc, pNtk );
+    Abc_FrameClearVerifStatus( pAbc );*/
     //pSwitching = (float *)vSwitching->pArray;
 
     //if ( pSwitching ) Vec_IntFree( vSwitching );

@@ -346,10 +346,10 @@ char * Saif_ReadString( Saif_Tree_t * p, Saif_Pair_t Pair )
   SeeAlso     []
 
 ***********************************************************************/
-int Saif_BuildItem2(Saif_Tree_t * p, char ** ppPos, char * pEnd ) {
+/*int Saif_BuildItem2(Saif_Tree_t * p, char ** ppPos, char * pEnd ) {
     Saif_Item_t * pItem;
     Saif_Pair_t Key, Body;
-    char * pNext, * pStop;
+    char * pStop;
 
     if (Saif_SkipSpaces(p, ppPos, pEnd, 0) == 1)
         return -2;
@@ -427,7 +427,7 @@ int Saif_BuildItem2(Saif_Tree_t * p, char ** ppPos, char * pEnd ) {
                  p->pFileName, p->nLines, Saif_ReadString( p, Key) );
     }
     return -1;
-}
+}*/
 
 /**Function*************************************************************
 
@@ -862,7 +862,6 @@ int Saif_ReadTimescale( Saif_Tree_t * p )
         char *token;
         long number;
         int number_zeros = 0;
-        char *unit = NULL;
         char * timescale = Saif_ReadString(p, pItem->Body);
 
         // Get the first token (number)
@@ -946,6 +945,12 @@ Vec_Int_t * Io_ReadSaif( char * pFileName )
     // The network has to correspond to the saif data
 
     return 0;
+}
+
+// Check if all the module names in the Saif file match the module names in the AIG
+int Io_CheckSaif( )
+{
+    return 1;
 }
 
 ////////////////////////////////////////////////////////////////////////
