@@ -119,6 +119,7 @@ Vec_Int_t * Sim_NtkComputeSwitching( Abc_Ntk_t * pNtk, int nPatterns )
     }
     //printf("OC: %f\n", out_count);
     Vec_PtrFree( vNodes );
+    Vec_IntFree( vIntSwitching );
     Sim_UtilInfoFree( vSimInfo );
     return vSwitching;
 }

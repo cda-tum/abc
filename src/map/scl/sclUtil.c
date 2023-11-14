@@ -313,21 +313,21 @@ void Abc_SclInsertBarBufs( Abc_Ntk_t * pNtk, Vec_Int_t * vBufs )
 
 void Abc_SclGatingPerform( SC_Lib * pLib, Abc_Ntk_t * p, int fUseMax, int fVerbose )
 {
-    Vec_Int_t * vMinCells;
-    Abc_Obj_t * pObj;
+    Vec_Int_t *vMinCells;
+    Abc_Obj_t *pObj;
     int i, gateId;
-    vMinCells = Abc_SclFindMinAreas( pLib, fUseMax );
-    Abc_SclMioGates2SclGates( pLib, p );
-    Abc_NtkForEachNodeNotBarBuf1( p, pObj, i )
-        {
-            gateId = Vec_IntEntry( p->vGates, i );
-            assert( gateId >= 0 && gateId < Vec_PtrSize(&pLib->vCells) );
-            gateId = Vec_IntEntry( vMinCells, gateId );
-            assert( gateId >= 0 && gateId < Vec_PtrSize(&pLib->vCells) );
-            Vec_IntWriteEntry( p->vGates, i, gateId );
-        }
-    Abc_SclSclGates2MioGates( pLib, p );
-    Vec_IntFree( vMinCells );
+    vMinCells = Abc_SclFindMinAreas(pLib, fUseMax);
+    Abc_SclMioGates2SclGates(pLib, p);
+    Abc_NtkForEachNodeNotBarBuf1(p, pObj, i)
+    {
+        gateId = Vec_IntEntry(p->vGates, i);
+        assert(gateId >= 0 && gateId < Vec_PtrSize(&pLib->vCells));
+        gateId = Vec_IntEntry(vMinCells, gateId);
+        assert(gateId >= 0 && gateId < Vec_PtrSize(&pLib->vCells));
+        Vec_IntWriteEntry(p->vGates, i, gateId);
+    }
+    Abc_SclSclGates2MioGates(pLib, p);
+    Vec_IntFree(vMinCells);
 }
 
 ////////////////////////////////////////////////////////////////////////

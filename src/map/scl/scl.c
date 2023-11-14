@@ -1249,7 +1249,7 @@ usage:
 
   Synopsis    []
 
-  Description []
+  Description [This is post mapping gating]
 
   SideEffects []
 
@@ -1275,17 +1275,17 @@ int Scl_CommandGating( Abc_Frame_t * pAbc, int argc, char ** argv )
         }
     }
 
-    if ( Abc_FrameReadNtk(pAbc) == NULL )
+    if ( pNtk == NULL )
     {
         fprintf( pAbc->Err, "There is no current network.\n" );
         return 1;
     }
-    if ( !Abc_NtkHasMapping(Abc_FrameReadNtk(pAbc)) )
+    if ( !Abc_NtkHasMapping(pNtk ) )
     {
         fprintf( pAbc->Err, "The current network is not mapped.\n" );
         return 1;
     }
-    if ( !Abc_SclCheckNtk(Abc_FrameReadNtk(pAbc), 0) )
+    if ( !Abc_SclCheckNtk(pNtk, 0) )
     {
         fprintf( pAbc->Err, "The current network is not in a topo order (run \"topo\").\n" );
         return 1;
