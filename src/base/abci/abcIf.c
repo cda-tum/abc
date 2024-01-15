@@ -409,8 +409,7 @@ void swap_nodes(Abc_Obj_t* a, Abc_Obj_t* b) {
 Abc_Ntk_t* swap_random_nodes_in_level(Abc_Ntk_t* pNtk, unsigned level)
 {
     // Loop over the network to find nodes at the given level and add them to an array
-    Abc_Ntk_t * pNtkNext = Abc_NtkDup( pNtk );
-    Vec_Ptr_t* nodesAtLevel =  Abc_IfGetNodesAtLevel( pNtkNext, level ) ;
+    Vec_Ptr_t* nodesAtLevel =  Abc_IfGetNodesAtLevel( pNtk, level ) ;
     int nodesAtLevelCount = Vec_PtrSize( nodesAtLevel );
 
     // Select two random nodes and swap them
@@ -420,17 +419,12 @@ Abc_Ntk_t* swap_random_nodes_in_level(Abc_Ntk_t* pNtk, unsigned level)
         while (randIndex2 == randIndex1)
             randIndex2 = rand() % nodesAtLevelCount;
 
-        Abc_Obj_t * a = Vec_PtrEntry(nodesAtLevel, randIndex1);
-        Abc_Obj_t * b = Vec_PtrEntry(nodesAtLevel, randIndex2);
-        printf( "Swapped Nodes: %i and %i\n", a->Id, b->Id );
-        printf( "Swapped Ranks: %i and %i", a->iTemp, b->iTemp );
         swap_nodes(Vec_PtrEntry(nodesAtLevel, randIndex1), Vec_PtrEntry(nodesAtLevel, randIndex2));
-        printf( "Swapped Ranks: %i and %i\n", a->iTemp, b->iTemp );
     }
 
     free(nodesAtLevel);
 
-    return pNtkNext;
+    return pNtk;
 }
 
 Abc_Ntk_t * simulated_annealing(Abc_Ntk_t * init_state, double init_temp, double final_temp, size_t cycles,
@@ -444,8 +438,10 @@ Abc_Ntk_t * simulated_annealing(Abc_Ntk_t * init_state, double init_temp, double
 
     double current_cost  = cost( init_state, level );
     Abc_Ntk_t * current_state = init_state;
+    //Abc_Ntk_t * current_state = Abc_NtkDup( init_state );
 
     Abc_Ntk_t * best_state = current_state;
+    // Abc_Ntk_t * best_state = Abc_NtkDup( current_state );
     double  best_cost  = current_cost;
 
     double temp = init_temp;
@@ -454,8 +450,22 @@ Abc_Ntk_t * simulated_annealing(Abc_Ntk_t * init_state, double init_temp, double
     {
         for (size_t c = 0; c < cycles; ++c)
         {
-            Abc_Ntk_t *new_state = next(current_state, level);
+            Abc_Obj_t * pNode;
+            int i;
+            Vec_Ptr_t* nodesAtLevel =  Abc_IfGetNodesAtLevel( current_state, level ) ;
+            Vec_PtrForEachEntry( Abc_Obj_t *, nodesAtLevel, pNode, i ) {
+                printf( "Ranks: %i\n", pNode->iTemp );
+            }
+
+            Abc_Ntk_t *new_state = current_state;
+            //Abc_Ntk_t *new_state = Abc_NtkDup( current_state );
+            new_state = swap_random_nodes_in_level(new_state, level);
             double new_cost = cost(new_state, level);
+
+            nodesAtLevel =  Abc_IfGetNodesAtLevel( new_state, level ) ;
+            Vec_PtrForEachEntry( Abc_Obj_t *, nodesAtLevel, pNode, i ) {
+                printf( "Ranks: %i\n", pNode->iTemp );
+            }
 
             if (new_cost < best_cost)
             {
