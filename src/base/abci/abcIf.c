@@ -93,6 +93,437 @@ void If_ManComputeSwitching( If_Man_t * pIfMan )
         Abc_PrintTime( 1, "Computing switching activity", Abc_Clock() - clk );
 }
 
+int Abc_IfNtkFindMaxLevel(Abc_Ntk_t *pNtk)
+{
+    int maxLevel = 0;
+    Abc_Obj_t *pNode;
+    int i;
+    // find maxLevel
+    Abc_NtkForEachNode(pNtk, pNode, i)
+    {
+        if (Abc_ObjLevel(pNode) > maxLevel)
+        {
+            maxLevel = Abc_ObjLevel(pNode);
+        }
+    }
+    return maxLevel;
+}
+
+Vec_Ptr_t * Abc_IfGetNodesAtLevel( Abc_Ntk_t *pNtk, u_int32_t level )
+{
+    Vec_Ptr_t * nodesAtLevel = Vec_PtrAlloc(0);
+    Abc_Obj_t * pNode;
+    int i;
+
+    Abc_NtkForEachCi(pNtk, pNode, i)
+    {
+        if( Abc_ObjLevel( pNode ) == level )
+        {
+            Vec_PtrPush(nodesAtLevel, pNode);
+        }
+    }
+    Abc_NtkForEachNode(pNtk, pNode, i)
+    {
+        if( Abc_ObjLevel( pNode ) == level )
+        {
+            Vec_PtrPush(nodesAtLevel, pNode);
+        }
+    }
+    return nodesAtLevel;
+}
+
+typedef struct
+{
+    Abc_Obj_t * source;
+    Abc_Obj_t * target;
+} Edge;
+
+typedef struct
+{
+    double x, y;
+} NodePos;
+
+NodePos Abc_IfGetNodePos( Abc_Ntk_t * pNtk , Abc_Obj_t * n)
+{
+    NodePos result;
+
+    result.x = n->iTemp;
+    result.y = n->Level;
+
+    return result;
+}
+
+int Abc_IfIsStraighLineCrossing( Abc_Ntk_t * pNtk, Abc_Obj_t * src1, Abc_Obj_t * tgt1, Abc_Obj_t * src2, Abc_Obj_t * tgt2 )
+{
+    NodePos p_src1 = Abc_IfGetNodePos( pNtk, src1 );
+    NodePos p_tgt1 = Abc_IfGetNodePos( pNtk, tgt1 );
+    NodePos p_src2 = Abc_IfGetNodePos( pNtk, src2 );
+    NodePos p_tgt2 = Abc_IfGetNodePos( pNtk, tgt2 );
+
+    double s1_x = p_tgt1.x - p_src1.x;
+    double s1_y = p_tgt1.y - p_src1.y;
+    double s2_x = p_tgt2.x - p_src2.x;
+    double s2_y = p_tgt2.y - p_src2.y;
+
+    double s = (-s1_y * (p_src1.x - p_src2.x) + s1_x * (p_src1.y - p_src2.y)) / (-s2_x * s1_y + s1_x * s2_y);
+    double t = (s2_x * (p_src1.y - p_src2.y) - s2_y * (p_src1.x - p_src2.x)) / (-s2_x * s1_y + s1_x * s2_y);
+
+    // do not use >= / <= here to not consider lines that share the same endpoints as a crossing
+    return (s > 0 && s < 1 && t > 0 && t < 1);
+}
+
+size_t Abc_NumCrossingsBetweenLevels( Abc_Ntk_t * pNtk, u_int32_t l1, u_int32_t l2 )
+{
+    // There are no crossings with itself
+    if (l1 == l2) {
+        return 0;
+    }
+    // Make sure that r1 is the lower level
+    if (l1 > l2) {
+        u_int32_t temp = l1;
+        l1 = l2;
+        l2 = temp;
+    }
+
+    assert(l1 + 1 == l2 && "r1 and r2 must be consecutive levels");
+
+    size_t crossings = 0;
+
+    // Gather all edges between levels r1 and r2
+    Vec_Ptr_t* edges = Vec_PtrAlloc(0);
+    Abc_Obj_t *pNode, *pFanin;
+    int i, j;
+
+    Vec_Ptr_t* nodesAtLevel2 =  Abc_IfGetNodesAtLevel( pNtk, l2 ) ;
+
+    Vec_PtrForEachEntry(Abc_Obj_t *, nodesAtLevel2, pNode, i) {
+        Abc_ObjForEachFanin(pNode, pFanin, j) {
+            if(Abc_ObjLevel(pFanin) == l1) {
+                Edge* edge = (Edge*)malloc(sizeof(Edge));
+                edge->source = pFanin;
+                edge->target = pNode;
+                Vec_PtrPush(edges, edge);
+
+                /*printf("Source: %i, Target: %i\n", pFanin->Id, pNode->Id);
+                printf("Edge level: %d, Source (x=%d, y=%d), Target (x=%d, y=%d)\n",
+                       l2,
+                       edge->source->iTemp,
+                       Abc_ObjLevel(edge->source),
+                       edge->target->iTemp,
+                       Abc_ObjLevel(edge->target));*/
+            }
+        }
+    }
+
+    int nEdges = Vec_PtrSize(edges);
+
+    if(nEdges >= 2) {
+        for(int i = 0; i < nEdges - 1; i++) {
+            for(int j = i + 1; j < nEdges; j++) {
+                Edge* edge1 = (Edge*)Vec_PtrEntry(edges, i);
+                Edge* edge2 = (Edge*)Vec_PtrEntry(edges, j);
+                if(Abc_IfIsStraighLineCrossing( pNtk, edge1->source, edge1->target, edge2->source, edge2->target ) )
+                {
+                    crossings++;
+                }
+            }
+        }
+    }
+
+    // free memory
+    for(int k = 0; k < nEdges; k++) {
+        free(Vec_PtrEntry(edges, k));
+    }
+    Vec_PtrFree( edges );
+    Vec_PtrFree( nodesAtLevel2 );
+
+    return crossings;
+}
+
+size_t Abc_IfNumCrossingsWithAdjacentLevels( Abc_Ntk_t * pNtk, u_int32_t l )
+{
+    size_t crossings = 0;
+    int maxLevel = Abc_IfNtkFindMaxLevel( pNtk );
+    // If r is not the last level, add crossings with level r + 1
+    if (l != maxLevel) {
+        crossings += Abc_NumCrossingsBetweenLevels(pNtk, l, l + 1);
+    }
+
+    // If r is not 0, there are no crossings with the previous level
+    if (l != 0) {
+        // Add crossings with level r - 1
+        crossings += Abc_NumCrossingsBetweenLevels(pNtk, l - 1, l);
+    }
+
+    return crossings;
+}
+
+void InsertBufferNodes( Abc_Ntk_t * pNtk )
+{
+    Abc_Obj_t *pNode;
+    int i;
+    // Abc_Ntk_t * pNtkNew = Abc_NtkDup( pNtk );
+
+    // Set levels for all nodes
+    Abc_NtkLevel( pNtk );
+
+    Abc_NtkForEachNode( pNtk, pNode, i )
+    {
+        Abc_Obj_t *pFanin;
+        int j;
+        Abc_ObjForEachFanin( pNode, pFanin, j )
+        {
+            for ( int lv = Abc_ObjLevel(pFanin) + 1; lv < Abc_ObjLevel(pNode); lv++ )
+            {
+                // create new buffer node
+                Abc_Obj_t *pBufferNode = Abc_NtkCreateNode( pNtk );
+
+                // Disconnect the original edge
+                Abc_ObjPatchFanin( pNode, pFanin, pBufferNode );
+
+                // Connect the dummy buffer to the fanin
+                Abc_ObjAddFanin( pBufferNode, pFanin );
+
+                // update pFanin of the Node
+                pFanin = Abc_ObjFanin( pNode, j );
+            }
+        }
+    }
+    // Set levels again for all nodes
+    pNtk->LevelMax = Abc_NtkLevel( pNtk );
+    if ( !Abc_NtkCheck( pNtk ) )
+    {
+        printf("Error: Buffered Ntk doesnt CHECK\n");
+    }
+}
+
+void Abc_IfComputeRanks(Abc_Ntk_t* pNtk, int** rankArray)
+{
+    Abc_Obj_t* pNode;
+    Abc_Obj_t* pObjDfs;
+    // Vec_Ptr_t * vNodesDfs;
+    int i, iDfs, currLevel;
+    int maxLevel = Abc_IfNtkFindMaxLevel( pNtk );
+
+    // create and initialize rankArray
+    *rankArray = (int*)calloc(maxLevel + 1, sizeof(int));
+
+    // compute ranks
+    // vNodesDfs = Abc_NtkDfs(pNtk, 0);
+    Abc_NtkForEachCi(pNtk, pNode, i)
+    {
+        pNode->iTemp = pNode->Id - 1 ;
+        /*printf("NodeID: %i \n", pNode->Id);
+        printf("Level: %i \n", pNode->Level);*/
+
+    }
+    Abc_NtkForEachNode( pNtk, pObjDfs, iDfs )
+    {
+        // get the current level currLevel
+        currLevel = Abc_ObjLevel( pObjDfs );
+        // rankArray[currLevel] holds the next available rank on level currLevel
+        // use iTemp to temporarily store the rank of the node
+        pObjDfs->iTemp = (*rankArray)[currLevel]++;
+        /*printf("NodeID: %i \n", pObjDfs->Id);
+        printf("Level: %i \n", pObjDfs->Level);*/
+    }
+    // Vec_PtrFree( vNodesDfs );
+}
+
+size_t Abc_IfCount_Crossings( Abc_Ntk_t * pNtk )
+{
+    size_t crossings = 0;
+    int maxLevel = Abc_IfNtkFindMaxLevel( pNtk );
+    u_int32_t l;
+    for(l = 0; l <= maxLevel; l += 2) {
+        crossings += Abc_IfNumCrossingsWithAdjacentLevels(pNtk, l);
+    }
+    // printf("CrossingNum: %zu\n", crossings);
+    return crossings;
+}
+
+size_t Abc_IfComputeCrossingNum( Abc_Ntk_t * pNtk )
+{
+    //Abc_Ntk_t * pNtkNew;
+
+    // insert buffers
+    // InsertBufferNodes( pNtk );
+    if( !pNtk )
+    {
+        printf("Error while inserting Buffers\n");
+    }
+
+    // create and initialize rankArray
+    int * rankArray;
+    Abc_IfComputeRanks( pNtk, &rankArray );
+
+    // compute crossings
+    size_t crossings;
+
+    // ntk.depth() in mockturtle is equivalent to maxLevel in ABC
+    crossings = Abc_IfCount_Crossings( pNtk );
+
+    free(rankArray); // remember to free the allocated memory after you're done
+
+    //Abc_NtkDelete( pNtkNew );
+
+    return crossings;
+}
+
+int Abc_IfCrossingCost_Wrapper(Abc_Ntk_t* p, unsigned level) {
+    return (int) Abc_IfNumCrossingsWithAdjacentLevels( p, level );
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#include <stdlib.h>
+#include <time.h>
+#include <assert.h>
+#include <math.h>
+
+void init_generator() {
+    srand(time(NULL));
+}
+
+// A helper function to generate a random integer in a given range
+unsigned int random_in_range(unsigned int min, unsigned int max) {
+    return min + rand() % (max + 1 - min);
+}
+
+double linear_temperature_schedule(double t)
+{
+    return t - 10.0;
+}
+
+double geometric_temperature_schedule(double t)
+{
+    return t * 0.99;
+}
+
+void swap_nodes(Abc_Obj_t* a, Abc_Obj_t* b) {
+    int temp = a->iTemp;
+    a->iTemp = b->iTemp;
+    b->iTemp = temp;
+}
+
+Abc_Ntk_t* swap_random_nodes_in_level(Abc_Ntk_t* pNtk, unsigned level)
+{
+    // Loop over the network to find nodes at the given level and add them to an array
+    Abc_Ntk_t * pNtkNext = Abc_NtkDup( pNtk );
+    Vec_Ptr_t* nodesAtLevel =  Abc_IfGetNodesAtLevel( pNtkNext, level ) ;
+    int nodesAtLevelCount = Vec_PtrSize( nodesAtLevel );
+
+    // Select two random nodes and swap them
+    if (nodesAtLevelCount > 1) {
+        int randIndex1 = rand() % nodesAtLevelCount;
+        int randIndex2 = rand() % nodesAtLevelCount;
+        while (randIndex2 == randIndex1)
+            randIndex2 = rand() % nodesAtLevelCount;
+
+        Abc_Obj_t * a = Vec_PtrEntry(nodesAtLevel, randIndex1);
+        Abc_Obj_t * b = Vec_PtrEntry(nodesAtLevel, randIndex2);
+        printf( "Swapped Nodes: %i and %i\n", a->Id, b->Id );
+        printf( "Swapped Ranks: %i and %i", a->iTemp, b->iTemp );
+        swap_nodes(Vec_PtrEntry(nodesAtLevel, randIndex1), Vec_PtrEntry(nodesAtLevel, randIndex2));
+        printf( "Swapped Ranks: %i and %i\n", a->iTemp, b->iTemp );
+    }
+
+    free(nodesAtLevel);
+
+    return pNtkNext;
+}
+
+Abc_Ntk_t * simulated_annealing(Abc_Ntk_t * init_state, double init_temp, double final_temp, size_t cycles,
+                                unsigned level,
+                                int (*cost)(Abc_Ntk_t *state, unsigned level),
+                                double (*schedule)(double temp),
+                                Abc_Ntk_t * (*next)(Abc_Ntk_t * state, unsigned level)
+)
+{
+    srand(time(NULL));
+
+    double current_cost  = cost( init_state, level );
+    Abc_Ntk_t * current_state = init_state;
+
+    Abc_Ntk_t * best_state = current_state;
+    double  best_cost  = current_cost;
+
+    double temp = init_temp;
+
+    while (temp > final_temp)
+    {
+        for (size_t c = 0; c < cycles; ++c)
+        {
+            Abc_Ntk_t *new_state = next(current_state, level);
+            double new_cost = cost(new_state, level);
+
+            if (new_cost < best_cost)
+            {
+                best_state = new_state;
+                best_cost = new_cost;
+                current_state = new_state; // std move: there could be memory issues
+                current_cost = new_cost; // std move: there could be memory issues
+                continue;
+            }
+
+            double cost_delta = new_cost - current_cost;
+
+            // in C, rand() generates a random integer,
+            // so we normalize by RAND_MAX to get a double between 0 and 1
+            double random_value = (double) rand() / (double) RAND_MAX;
+
+            // shortcut to skip the expensive std::exp call
+            if (cost_delta > 10.0 * temp) {
+                continue;  // as exp(-10.0) is a very small number
+            }
+
+            // if the new state is worse, accept it with a probability of exp(-energy_delta/temp)
+            if (cost_delta <= 0.0 || exp(-cost_delta / temp) > random_value) {
+                current_state = new_state; // std move: there could be memory issues
+                current_cost = new_cost; // std move: there could be memory issues
+            }
+        }
+
+        // update temperature
+        temp = fmax(fmin(schedule(temp), init_temp), final_temp);
+    }
+
+    return best_state;
+}
+
+void If_ManComputeCrossings( Abc_Ntk_t * pNtk )
+{
+    double initial_temperature = 100;
+    double final_temperature = 1;
+    size_t number_of_cycles = 10;
+
+    Abc_Ntk_t * pNtkOpt = Abc_NtkDup( pNtk );
+
+    InsertBufferNodes( pNtkOpt );
+
+    size_t crossings_b = Abc_IfComputeCrossingNum( pNtkOpt );
+    printf("CrossingNum: %zu\n", crossings_b);
+
+    for ( u_int32_t level = 0; level < pNtkOpt->LevelMax; ++level )
+    {
+        simulated_annealing( pNtkOpt,  initial_temperature, final_temperature, number_of_cycles, level,Abc_IfCrossingCost_Wrapper,
+                             linear_temperature_schedule, swap_random_nodes_in_level );
+    }
+
+    /*u_int32_t level = 2;
+
+    simulated_annealing( pNtkOpt,  initial_temperature, final_temperature, number_of_cycles, level,Abc_IfCrossingCost_Wrapper,
+                         linear_temperature_schedule, swap_random_nodes_in_level );*/
+
+    size_t crossings_a = Abc_IfComputeCrossingNum( pNtkOpt );
+    printf("CrossingRed: %zu\n", crossings_a-crossings_b);
+
+    Abc_NtkDelete( pNtkOpt );
+}
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
 /**Function*************************************************************
 
   Synopsis    [Interface with the FPGA mapping package.]
@@ -168,11 +599,37 @@ Abc_Ntk_t * Abc_NtkIf( Abc_Ntk_t * pNtk, If_Par_t * pPars )
         return NULL;
     }
 
+    // apply manipulation
+    /*If_Man_t * pIfManDec;
+    if ( pPars->nLutSize == 4 )
+    {
+        pPars->nLutSize = 2;
+        pIfManDec = Abc_NtkToIf( pNtk, pPars );
+        if ( !If_ManPerformMapping( pIfManDec ) )
+        {
+            If_ManStop( pIfManDec );
+            return NULL;
+        }
+    }*/
+
+    /* Approach 1: Make a mapping with 4LUTs and a mapping with 2 LUTs.
+     * For every 4LUT there is a 2LUT decomposition in the 2 LUT mapping.
+     * */
+    // transform the result of mapping into the new network
+    // pNtkNew = If_ManReduceCrossings( pIfMan, pIfManDec, pNtk );
+
     // transform the result of mapping into the new network
     pNtkNew = Abc_NtkFromIf( pIfMan, pNtk );
     if ( pNtkNew == NULL )
         return NULL;
+    // calculate crossings in pNtkNew
+    /*size_t crossings = Abc_IfComputeCrossingNum( pNtk );
+    printf("CrossingNum: %zu\n", crossings);*/
+
+    If_ManComputeCrossings( pNtk );
+
     If_ManStop( pIfMan );
+    // If_ManStop( pIfManDec );
     if ( pPars->fDelayOpt || pPars->fDsdBalance || pPars->fUserRecLib )
     {
         pNtkNew = Abc_NtkStrash( pTemp = pNtkNew, 0, 0, 0 );
