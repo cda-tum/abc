@@ -301,7 +301,7 @@ void Abc_IfComputeRanks(Abc_Ntk_t* pNtk, int** rankArray)
 {
     Abc_Obj_t* pNode;
     Abc_Obj_t* pObjDfs;
-    // Vec_Ptr_t * vNodesDfs;
+    // Vec_Ptr_t * vNodesDfs; Hallo
     int i, iDfs, currLevel;
     int maxLevel = Abc_IfNtkFindMaxLevel( pNtk );
 
