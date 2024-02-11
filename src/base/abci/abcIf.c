@@ -35,6 +35,7 @@ ABC_NAMESPACE_IMPL_START
 extern If_Man_t *  Abc_NtkToIf( Abc_Ntk_t * pNtk, If_Par_t * pPars );
 static Abc_Ntk_t * Abc_NtkFromIf( If_Man_t * pIfMan, Abc_Ntk_t * pNtk );
 extern Abc_Obj_t * Abc_NodeFromIf_rec( Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Obj_t * pIfObj, Vec_Int_t * vCover );
+extern Abc_Obj_t * Abc_NodeFromIfDec_rec( Abc_Ntk_t * pNtk, Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Obj_t * pIfObj, Vec_Int_t * vCover );
 static Hop_Obj_t * Abc_NodeIfToHop( Hop_Man_t * pHopMan, If_Man_t * pIfMan, If_Obj_t * pIfObj );
 static Vec_Ptr_t * Abc_NtkFindGoodOrder( Abc_Ntk_t * pNtk );
 
@@ -347,7 +348,7 @@ size_t Abc_IfComputeCrossingNum( Abc_Ntk_t * pNtk )
     //Abc_Ntk_t * pNtkNew;
 
     // insert buffers
-    // InsertBufferNodes( pNtk );
+    InsertBufferNodes( pNtk );
     if( !pNtk )
     {
         printf("Error while inserting Buffers\n");
@@ -370,169 +371,244 @@ size_t Abc_IfComputeCrossingNum( Abc_Ntk_t * pNtk )
     return crossings;
 }
 
-int Abc_IfCrossingCost_Wrapper(Abc_Ntk_t* p, unsigned level) {
-    return (int) Abc_IfNumCrossingsWithAdjacentLevels( p, level );
-}
-
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-#include <stdlib.h>
-#include <time.h>
-#include <assert.h>
-#include <math.h>
-
-void init_generator() {
-    srand(time(NULL));
-}
-
-// A helper function to generate a random integer in a given range
-unsigned int random_in_range(unsigned int min, unsigned int max) {
-    return min + rand() % (max + 1 - min);
-}
-
-double linear_temperature_schedule(double t)
-{
-    return t - 10.0;
-}
-
-double geometric_temperature_schedule(double t)
-{
-    return t * 0.99;
-}
-
-void swap_nodes(Abc_Obj_t* a, Abc_Obj_t* b) {
-    int temp = a->iTemp;
-    a->iTemp = b->iTemp;
-    b->iTemp = temp;
-}
-
-Abc_Ntk_t* swap_random_nodes_in_level(Abc_Ntk_t* pNtk, unsigned level)
-{
-    // Loop over the network to find nodes at the given level and add them to an array
-    Vec_Ptr_t* nodesAtLevel =  Abc_IfGetNodesAtLevel( pNtk, level ) ;
-    int nodesAtLevelCount = Vec_PtrSize( nodesAtLevel );
-
-    // Select two random nodes and swap them
-    if (nodesAtLevelCount > 1) {
-        int randIndex1 = rand() % nodesAtLevelCount;
-        int randIndex2 = rand() % nodesAtLevelCount;
-        while (randIndex2 == randIndex1)
-            randIndex2 = rand() % nodesAtLevelCount;
-
-        swap_nodes(Vec_PtrEntry(nodesAtLevel, randIndex1), Vec_PtrEntry(nodesAtLevel, randIndex2));
-    }
-
-    free(nodesAtLevel);
-
-    return pNtk;
-}
-
-Abc_Ntk_t * simulated_annealing(Abc_Ntk_t * init_state, double init_temp, double final_temp, size_t cycles,
-                                unsigned level,
-                                int (*cost)(Abc_Ntk_t *state, unsigned level),
-                                double (*schedule)(double temp),
-                                Abc_Ntk_t * (*next)(Abc_Ntk_t * state, unsigned level)
-)
-{
-    srand(time(NULL));
-
-    double current_cost  = cost( init_state, level );
-    Abc_Ntk_t * current_state = init_state;
-    //Abc_Ntk_t * current_state = Abc_NtkDup( init_state );
-
-    Abc_Ntk_t * best_state = current_state;
-    // Abc_Ntk_t * best_state = Abc_NtkDup( current_state );
-    double  best_cost  = current_cost;
-
-    double temp = init_temp;
-
-    while (temp > final_temp)
-    {
-        for (size_t c = 0; c < cycles; ++c)
-        {
-            Abc_Obj_t * pNode;
-            int i;
-            Vec_Ptr_t* nodesAtLevel =  Abc_IfGetNodesAtLevel( current_state, level ) ;
-            Vec_PtrForEachEntry( Abc_Obj_t *, nodesAtLevel, pNode, i ) {
-                printf( "Ranks: %i\n", pNode->iTemp );
-            }
-
-            Abc_Ntk_t *new_state = current_state;
-            //Abc_Ntk_t *new_state = Abc_NtkDup( current_state );
-            new_state = swap_random_nodes_in_level(new_state, level);
-            double new_cost = cost(new_state, level);
-
-            nodesAtLevel =  Abc_IfGetNodesAtLevel( new_state, level ) ;
-            Vec_PtrForEachEntry( Abc_Obj_t *, nodesAtLevel, pNode, i ) {
-                printf( "Ranks: %i\n", pNode->iTemp );
-            }
-
-            if (new_cost < best_cost)
-            {
-                best_state = new_state;
-                best_cost = new_cost;
-                current_state = new_state; // std move: there could be memory issues
-                current_cost = new_cost; // std move: there could be memory issues
-                continue;
-            }
-
-            double cost_delta = new_cost - current_cost;
-
-            // in C, rand() generates a random integer,
-            // so we normalize by RAND_MAX to get a double between 0 and 1
-            double random_value = (double) rand() / (double) RAND_MAX;
-
-            // shortcut to skip the expensive std::exp call
-            if (cost_delta > 10.0 * temp) {
-                continue;  // as exp(-10.0) is a very small number
-            }
-
-            // if the new state is worse, accept it with a probability of exp(-energy_delta/temp)
-            if (cost_delta <= 0.0 || exp(-cost_delta / temp) > random_value) {
-                current_state = new_state; // std move: there could be memory issues
-                current_cost = new_cost; // std move: there could be memory issues
-            }
-        }
-
-        // update temperature
-        temp = fmax(fmin(schedule(temp), init_temp), final_temp);
-    }
-
-    return best_state;
-}
-
 void If_ManComputeCrossings( Abc_Ntk_t * pNtk )
 {
-    double initial_temperature = 100;
-    double final_temperature = 1;
-    size_t number_of_cycles = 10;
-
     Abc_Ntk_t * pNtkOpt = Abc_NtkDup( pNtk );
-
-    InsertBufferNodes( pNtkOpt );
 
     size_t crossings_b = Abc_IfComputeCrossingNum( pNtkOpt );
     printf("CrossingNum: %zu\n", crossings_b);
 
-    for ( u_int32_t level = 0; level < pNtkOpt->LevelMax; ++level )
-    {
-        simulated_annealing( pNtkOpt,  initial_temperature, final_temperature, number_of_cycles, level,Abc_IfCrossingCost_Wrapper,
-                             linear_temperature_schedule, swap_random_nodes_in_level );
-    }
+    // Compute the ranks so that they are on the average positions between nodes
 
-    /*u_int32_t level = 2;
 
-    simulated_annealing( pNtkOpt,  initial_temperature, final_temperature, number_of_cycles, level,Abc_IfCrossingCost_Wrapper,
-                         linear_temperature_schedule, swap_random_nodes_in_level );*/
-
-    size_t crossings_a = Abc_IfComputeCrossingNum( pNtkOpt );
-    printf("CrossingRed: %zu\n", crossings_a-crossings_b);
+   /* size_t crossings_a = Abc_IfComputeCrossingNum( pNtkOpt );
+    printf("CrossingRed: %zu\n", crossings_a-crossings_b);*/
 
     Abc_NtkDelete( pNtkOpt );
 }
 
+Abc_Ntk_t * If_ManReduceCrossings( If_Man_t * pIfMan, Abc_Ntk_t * pNtk )
+{
+    ProgressBar * pProgress;
+    Abc_Ntk_t * pNtkNew;
+    Abc_Obj_t * pNode, * pNodeNew;
+    Vec_Int_t * vCover;
+    int i, nDupGates;
+    // create the new network
+    if ( pIfMan->pPars->fUseBdds || pIfMan->pPars->fUseCnfs || pIfMan->pPars->fUseMv )
+        pNtkNew = Abc_NtkStartFrom( pNtk, ABC_NTK_LOGIC, ABC_FUNC_BDD );
+    else if ( pIfMan->pPars->fUseSops || pIfMan->pPars->fUserSesLib || pIfMan->pPars->nGateSize > 0 )
+        pNtkNew = Abc_NtkStartFrom( pNtk, ABC_NTK_LOGIC, ABC_FUNC_SOP );
+    else
+        pNtkNew = Abc_NtkStartFrom( pNtk, ABC_NTK_LOGIC, ABC_FUNC_AIG );
+    // prepare the mapping manager
+    If_ManCleanNodeCopy( pIfMan );
+    If_ManCleanCutData( pIfMan );
+    // make the mapper point to the new network
+    If_ObjSetCopy( If_ManConst1(pIfMan), Abc_NtkCreateNodeConst1(pNtkNew) );
+    Abc_NtkForEachCi( pNtk, pNode, i )
+        If_ObjSetCopy( If_ManCi(pIfMan, i), pNode->pCopy );
 
-///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+    // process the nodes in topological order
+    vCover = Vec_IntAlloc( 1 << 16 );
+    pProgress = Extra_ProgressBarStart( stdout, Abc_NtkCoNum(pNtk) );
+    Abc_NtkForEachCo( pNtk, pNode, i )
+    {
+        Extra_ProgressBarUpdate( pProgress, i, "Final" );
+        pNodeNew = Abc_NodeFromIfDec_rec( pNtk, pNtkNew, pIfMan, If_ObjFanin0(If_ManCo(pIfMan, i)), vCover );
+        pNodeNew = Abc_ObjNotCond( pNodeNew, If_ObjFaninC0(If_ManCo(pIfMan, i)) );
+        Abc_ObjAddFanin( pNode->pCopy, pNodeNew );
+    }
+    Extra_ProgressBarStop( pProgress );
+    Vec_IntFree( vCover );
+
+    // remove the constant node if not used
+    pNodeNew = (Abc_Obj_t *)If_ObjCopy( If_ManConst1(pIfMan) );
+    if ( Abc_ObjFanoutNum(pNodeNew) == 0 && !Abc_ObjIsNone(pNodeNew) )
+        Abc_NtkDeleteObj( pNodeNew );
+    // minimize the node
+    if ( pIfMan->pPars->fUseBdds || pIfMan->pPars->fUseCnfs || pIfMan->pPars->fUseMv )
+        Abc_NtkSweep( pNtkNew, 0 );
+    if ( pIfMan->pPars->fUseBdds )
+        Abc_NtkBddReorder( pNtkNew, 0 );
+    // decouple the PO driver nodes to reduce the number of levels
+    nDupGates = Abc_NtkLogicMakeSimpleCos( pNtkNew, !pIfMan->pPars->fUseBuffs );
+    if ( nDupGates && pIfMan->pPars->fVerbose && !Abc_FrameReadFlag("silentmode") )
+    {
+        if ( pIfMan->pPars->fUseBuffs )
+            printf( "Added %d buffers/inverters to decouple the CO drivers.\n", nDupGates );
+        else
+            printf( "Duplicated %d gates to decouple the CO drivers.\n", nDupGates );
+    }
+    return pNtkNew;
+}
+/**Function*************************************************************
+
+  Synopsis    []
+
+  Description [Traversal functions to find shared nodes in AIG.]
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+/*Helper function*/
+void If_ManCleanMarkS( If_Man_t * p )
+{
+    If_Obj_t * pObj;
+    int i;
+    If_ManForEachObj( p, pObj, i )
+        pObj->fSpec = 0;
+}
+int CountSharedLeaves( If_Cut_t * pC0, If_Cut_t * pC1 )
+{
+    int nSzC0 = pC0->nLeaves;
+    int nSzC1 = pC1->nLeaves;
+    int sharedLeaves = 0;
+    for ( int l0 = 0; l0 < nSzC0; l0++ )
+    {
+        for ( int l1 = 0; l1 < nSzC1; l1++ )
+        {
+            if ( pC0->pLeaves[l0] == pC1->pLeaves[l1] )
+            {
+                sharedLeaves++;
+                break;
+            }
+        }
+    }
+    return sharedLeaves;
+}
+/*void Decompose( Abc_Ntk_t * pNtk, If_Man_t * pIfMan, If_Cut_t * pC0, If_Cut_t * pC1 )
+{
+
+}
+int Abc_TraverseandCompareNodesIf_rec( Abc_Ntk_t * pNtk, If_Man_t * pIfMan, If_Obj_t * pIfObj, If_Cut_t * pC0 )
+{
+    If_Cut_t * pC1;
+    If_Obj_t * pIfLeaf;
+    int i;
+    if( pIfObj->Type != IF_AND || pIfObj->fVisit == 1 || pIfObj->fSpec )
+        return 1;
+
+    pC1 = If_ObjCutBest( pIfObj );
+
+    If_CutForEachLeaf(pIfMan, pC1, pIfLeaf, i)
+    {
+        Abc_TraverseandCompareNodesIf_rec( pNtk, pIfMan, pIfLeaf, pC0 ); // recursive call
+    }
+
+    printf("Second Id: %i\n", pIfObj->Id);
+    int sharedLeaves = CountSharedLeaves( pC0, pC1 );
+    if( sharedLeaves > 1 )
+        printf("Number of shared leaves: %d\n", sharedLeaves);
+    if( sharedLeaves == 4 )
+        Decompose( pNtk, pIfMan, pC0, pC1 );
+
+    pIfObj->fSpec = 1;
+
+    return 1;
+}
+
+void compareCuts( Abc_Ntk_t * pNtk, If_Man_t * pIfMan, If_Cut_t * pC )
+{
+    Abc_Obj_t * pNode;
+    int i;
+    If_ManCleanMarkS( pIfMan );
+    Abc_NtkForEachCo( pNtk, pNode, i )
+    {
+        Abc_TraverseandCompareNodesIf_rec( pNtk, pIfMan, If_ObjFanin0(If_ManCo(pIfMan, i)), pC );
+    }
+}*/
+
+int Abc_TraverseNodesIfTwice_rec( Abc_Ntk_t * pNtk, If_Man_t * pIfMan, If_Obj_t * pIfObj )
+{
+    If_Cut_t * pC;
+    If_Obj_t * pIfLeaf;
+    int i;
+    if( (pIfObj->Type != IF_AND) || pIfObj->fVisit == 1 )
+        return 1;
+    pC = If_ObjCutBest( pIfObj );
+
+    If_CutForEachLeaf(pIfMan, pC, pIfLeaf, i)
+    {
+        Abc_TraverseNodesIfTwice_rec( pNtk, pIfMan, pIfLeaf ); // recursive call
+    }
+    printf("Id: %i\n", pIfObj->Id);
+    pIfObj->fVisit = 1;
+    // Last cut can be skipped since there is no cut to compare it to
+    if ( pC == If_ObjCutBest( If_ObjFanin0( If_ManCo( pIfMan, Vec_PtrSize( pIfMan->vCos) - 1 ) ) ) )
+    {
+        return 0;
+    }
+    // compareCuts( pNtk, pIfMan, pC ); // compare the leaves
+
+    return 0;
+}
+If_Obj_t * Abc_TraverseNodesIf_rec( Abc_Ntk_t * pNtk, If_Man_t * pIfMan, If_Obj_t * pIfObj, If_Cut_t * pC0 )
+{
+    If_Cut_t * pC1;
+    If_Obj_t * pIfLeaf, * nodeResult;
+    int i;
+
+    if( (pIfObj->Type != IF_AND) || pIfObj->fVisit == 1 )
+        return NULL;
+
+    pC1 = If_ObjCutBest( pIfObj );
+
+    If_CutForEachLeaf(pIfMan, pC1, pIfLeaf, i)
+    {
+        nodeResult = Abc_TraverseNodesIf_rec( pNtk, pIfMan, pIfLeaf, pC0 ); // recursive call
+        if (nodeResult != NULL && pC0 != pC1) {
+            return nodeResult; // break and return if a match is found
+        }
+    }
+
+    int sharedLeaves = CountSharedLeaves( pC0, pC1 );
+    if( sharedLeaves == 4 && pC1 != pC0 )
+    {
+        // printf("Number of shared leaves: %d\n", sharedLeaves);
+        return pIfObj;
+    }
+
+    pIfObj->fVisit = 1;
+    // Last cut can be skipped since there is no cut to compare it to
+    if ( pC1 == If_ObjCutBest( If_ObjFanin0( If_ManCo( pIfMan, Vec_PtrSize( pIfMan->vCos) - 1 ) ) ) )
+    {
+        return NULL;
+    }
+
+    return NULL;
+}
+/**Function*************************************************************
+
+  Synopsis    [Create a Mapping Manager with decomposed LUTs to decrease crossings.]
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+void LutDecomposition( If_Man_t * pIfMan, Abc_Ntk_t * pNtk )
+{
+    If_Obj_t * pIfObj;
+    Abc_Obj_t * pNode;
+    int i;
+    // go through pIfMan
+    printf("Ein Aufruf\n");
+    If_ManCleanMarkV( pIfMan );
+
+    Abc_NtkForEachCo( pNtk, pNode, i )
+    {
+        printf("Iteration0 PO\n");
+        Abc_TraverseNodesIfTwice_rec( pNtk, pIfMan, If_ObjFanin0(If_ManCo(pIfMan, i)) );
+    }
+    // find LUTs with the same shared inputs
+    // find all decompositions of these LUTs
+    // if it can find a valid solution accept it, if not try another LUT pair.
+}
 
 /**Function*************************************************************
 
@@ -609,37 +685,13 @@ Abc_Ntk_t * Abc_NtkIf( Abc_Ntk_t * pNtk, If_Par_t * pPars )
         return NULL;
     }
 
-    // apply manipulation
-    /*If_Man_t * pIfManDec;
-    if ( pPars->nLutSize == 4 )
-    {
-        pPars->nLutSize = 2;
-        pIfManDec = Abc_NtkToIf( pNtk, pPars );
-        if ( !If_ManPerformMapping( pIfManDec ) )
-        {
-            If_ManStop( pIfManDec );
-            return NULL;
-        }
-    }*/
-
-    /* Approach 1: Make a mapping with 4LUTs and a mapping with 2 LUTs.
-     * For every 4LUT there is a 2LUT decomposition in the 2 LUT mapping.
-     * */
     // transform the result of mapping into the new network
-    // pNtkNew = If_ManReduceCrossings( pIfMan, pIfManDec, pNtk );
-
-    // transform the result of mapping into the new network
-    pNtkNew = Abc_NtkFromIf( pIfMan, pNtk );
+    // pNtkNew = Abc_NtkFromIf( pIfMan, pNtk );
+    pNtkNew = If_ManReduceCrossings( pIfMan, pNtk );
     if ( pNtkNew == NULL )
         return NULL;
-    // calculate crossings in pNtkNew
-    /*size_t crossings = Abc_IfComputeCrossingNum( pNtk );
-    printf("CrossingNum: %zu\n", crossings);*/
-
-    If_ManComputeCrossings( pNtk );
 
     If_ManStop( pIfMan );
-    // If_ManStop( pIfManDec );
     if ( pPars->fDelayOpt || pPars->fDsdBalance || pPars->fUserRecLib )
     {
         pNtkNew = Abc_NtkStrash( pTemp = pNtkNew, 0, 0, 0 );
@@ -904,6 +956,217 @@ Hop_Obj_t * Abc_NodeBuildFromMini( Hop_Man_t * pMan, If_Man_t * p, If_Cut_t * pC
   SeeAlso     []
 
 ***********************************************************************/
+void printBits(word input) {
+    int bits_in_word = 8 * sizeof(word);
+    for (int bit = 0; bit < bits_in_word; ++bit) {
+        printf("%d", (input >> (bits_in_word - bit - 1)) & 1);
+    }
+    printf("\n");
+}
+void printBits2(word input) {
+    int bits_in_word = 4;
+    for (int bit = 0; bit < bits_in_word; ++bit) {
+        printf("%d", (input >> (bits_in_word - bit - 1)) & 1);
+    }
+    printf("\n");
+}
+// Function to convert 16, 8, or 4-bit sequence into 64-bit sequence by repeating it
+word convertTo64Bit(word smallTruth, int bits) {
+    word result = 0;
+    int repeats = 64 / bits;
+
+    for (int i = 0; i < repeats; i++)
+        result = (result << bits) | smallTruth;
+
+    return result;
+}
+
+void swapAdjacentIterations(word *pTruth, int nWords, int iVarIndices[], int numIndices) {
+    for (int i = 0; i < numIndices; i++) {
+        Abc_TtSwapAdjacent(pTruth, nWords, iVarIndices[i]);
+    }
+}
+
+void Abc_TtShift(word *pTruth, int nWords, int nVars, int nShifts) {
+    if (nVars <= 1 || nShifts == 0) {
+        return;
+    }
+
+    switch (nShifts) {
+        case 1: {
+            int indices[] = {2};
+            swapAdjacentIterations(pTruth, nWords, indices, sizeof(indices) / sizeof(indices[0]));
+            break;
+        }
+        case 2: {
+            int indices[] = {1, 2, 1};
+            swapAdjacentIterations(pTruth, nWords, indices, sizeof(indices) / sizeof(indices[0]));
+            break;
+        }
+        case 3: {
+            int indices[] = {0, 1, 2, 1, 0};
+            swapAdjacentIterations(pTruth, nWords, indices, sizeof(indices) / sizeof(indices[0]));
+            break;
+        }
+
+        default:
+            printf("Invalid bit value\n");
+            break;
+    }
+}
+void Abc_TtCircularShift(word * pTruth, int nWords, int nVars)
+{
+    if(nVars <= 1) // If there is only 1 variable or none, simply return
+    {
+        return;
+    }
+
+    // For every variable from 0 to nVars-1, swap iVar with iVar+1
+    for(int iVar=0; iVar < nVars-1; iVar++)
+    {
+        Abc_TtSwapAdjacent(pTruth, nWords, iVar);
+    }
+}
+void Abc_TtLValue(word * pTruth, int nWords, int nVars)
+{
+    if(nVars <= 1) // If there is only 1 variable or none, simply return
+    {
+        return;
+    }
+
+    // For every variable from nVars-1 to 1, swap iVar with iVar-1
+    for(int iVar = nVars-1; iVar > 0; iVar--)
+    {
+        Abc_TtSwapAdjacent(pTruth, nWords, iVar-1);
+    }
+}
+int apply_operations( word lut4inp, word lut3inp, word lut2inp )
+{
+    word bit1 = 0xFF00 ;
+    bit1 = convertTo64Bit(bit1, 16);
+    word output = 0;
+    int bits_in_word = 4;
+    for (int bit = 0; bit < bits_in_word; ++bit) {
+        int do_operation = (lut2inp >> (bits_in_word - bit - 1)) & 1;
+
+        if ( do_operation )
+        {
+            switch (bit)
+            {
+                case 0:
+                    output = output | ( bit1 & lut3inp );
+                    break;
+
+                case 1:
+                    output = output | ( bit1 & ~lut3inp );
+                    break;
+
+                case 2:
+                    output = output | ( ~bit1 & lut3inp );
+                    break;
+
+                case 3:
+                    output = output | ( ~bit1 & ~lut3inp );
+                    break;
+
+                default:
+                    printf("Invalid bit value\n");
+                    break;
+            }
+        }
+    }
+    if( lut4inp == output )
+    {
+        return 1;
+    }
+
+
+    return 0;
+}
+
+// Function to generate the binary sequence and return it as an array
+word* generate_binary_sequence(int num_bits, int* size) {
+    *size = (1 << num_bits);
+    word* sequence = (word*)malloc(*size * sizeof(word));
+    sequence[0] = 0; // First entry is all 0s
+    int idx = 1;
+    for (int num_bits_set = 1; num_bits_set <= num_bits; ++num_bits_set) {
+        for (int i = 0; i < (1 << num_bits); ++i) {
+            int set_bits_count = 0;
+            for (int j = 0; j < num_bits; ++j) {
+                if ((i >> j) & 1) {
+                    set_bits_count++;
+                }
+            }
+            if (set_bits_count == num_bits_set) {
+                sequence[idx++] = i;
+            }
+        }
+    }
+    return sequence;
+}
+
+int dec1( word four_inp_lut1, word four_inp_lut2 )
+{
+    int num_bits = 8;
+    int size;
+    word* sequence = generate_binary_sequence(num_bits, &size);
+    word cur3inpLut, cur3inpLuttest;
+    // find a three input LUT
+    /*word* sequencetest = generate_binary_sequence(num_bits, &size);
+    for (int i = 8; i < size; ++i)
+    {
+        cur3inpLuttest = convertTo64Bit(sequencetest[i], num_bits );
+        printf("Before:\n");
+        printBits(cur3inpLuttest);
+        Abc_TtCircularShift( &cur3inpLuttest, 1, 4 );
+        printf("After:\n");
+        printBits(cur3inpLuttest);
+        break;
+    }*/
+    for (int i = 0; i < size; ++i)
+    {
+        int found_dec = 0;
+        cur3inpLut = convertTo64Bit(sequence[i], num_bits );
+        // check for correct decomposition for the first four input LUT
+        for (int j = 0; j < 16; j++)
+        {
+            found_dec = apply_operations(four_inp_lut1, cur3inpLut, (word) j);
+            if ( found_dec )
+            {
+                /*printf("First Dec found: \n");
+                printBits(cur3inpLut);*/
+                // check for correct decomposition for the second four input LUT
+                for (int k = 0; k < 16; k++)
+                {
+                    // Abc_TtCircularShift( &cur3inpLut, 1, 4 );
+                    found_dec = apply_operations(four_inp_lut2, cur3inpLut, (word) k);
+                    if ( found_dec )
+                    {
+                        printf("Four input LUTs: \n");
+                        printBits(four_inp_lut1);
+                        printBits(four_inp_lut2);
+                        printf("Three input LUT: \n");
+                        printBits(cur3inpLut);
+                        printf("Two input LUTs: \n");
+                        printBits((word) j);
+                        printBits((word) k);
+
+                        free(sequence);
+                        return 1;
+                    }
+                }
+            }
+
+        }
+    }
+
+    // Free dynamically allocated memory
+    free(sequence);
+    return 0;
+}
+
+
 Hop_Obj_t * Abc_DecRecordToHop( Hop_Man_t * pMan, If_Man_t * pIfMan, If_Cut_t * pCutBest, If_Obj_t * pIfObj, Vec_Int_t * vCover )
 {
     // get the truth table
@@ -915,6 +1178,196 @@ Hop_Obj_t * Abc_DecRecordToHop( Hop_Man_t * pMan, If_Man_t * pIfMan, If_Cut_t * 
     word * pTruth = If_CutTruthW(pIfMan, pCutBest);
     assert( !pIfMan->pPars->fUseTtPerm );
     return Kit_TruthToHop( (Hop_Man_t *)pMan, (unsigned *)pTruth, If_CutLeaveNum(pCutBest), vCover );
+}
+Hop_Obj_t * Abc_DecRecordToHopCros( Abc_Ntk_t * pNtk, Hop_Man_t * pMan, If_Man_t * pIfMan, If_Cut_t * pCutBest, If_Obj_t * pIfObj, Vec_Int_t * vCover )
+{
+    // get another truth table with shared leafs
+    Abc_Obj_t * pNode;
+    If_Obj_t * foundNode;
+    If_Cut_t * pCutBest1;
+    int i;
+    printf("Function call\n");
+    // go through pIfMan
+    If_ManCleanMarkV( pIfMan );
+    Abc_NtkForEachCo( pNtk, pNode, i )
+    {
+        foundNode = Abc_TraverseNodesIf_rec( pNtk, pIfMan, If_ObjFanin0(If_ManCo(pIfMan, i)), pCutBest );
+        if (foundNode != NULL)
+        {
+            // printf("Ended search as node with sharedLeaves == 4 is found\n");
+            break;
+        }
+    }
+    pCutBest1 = If_ObjCutBest( foundNode );
+    If_CutRotatePins( pIfMan, pCutBest1 );
+    // depending on the order of leafs the tt has to be adjusted
+
+    // int nSzC0 = pCutBest1->nLeaves;
+    // int nSzC1 = pC1->nLeaves;
+    /*for ( int l0 = 0; l0 < nSzC0; l0++ )
+    {
+        printf("Leaves: %i \n", pCutBest1->pLeaves[l0]);
+    }*/
+    // printf( "The nodes %i and %i have shared Leaves\n", pIfObj->Id, foundNode->Id );
+
+    // get the truth table
+    // perform LUT-decomposition and return the LUT-structure
+    // convert the LUT-structure into a set of logic nodes in Abc_Ntk_t
+
+    // this is a placeholder, which takes the truth table and converts it into an AIG without LUT-decomposition
+    extern Hop_Obj_t * Kit_TruthToHop( Hop_Man_t * pMan, unsigned * pTruth, int nVars, Vec_Int_t * vMemory );
+    word * pTruth1 = If_CutTruthW(pIfMan, pCutBest1);
+    word pTruth1_copy = *pTruth1;
+
+    word * pTruth0 = If_CutTruthW(pIfMan, pCutBest);
+    word pTruth0_copy = *pTruth0;
+    // both truth tables need to be in their non-complemented form
+    if(  If_CutTruthIsCompl( pCutBest ) )
+    {
+        pTruth0_copy = ~pTruth0_copy;
+    }
+    if(  If_CutTruthIsCompl( pCutBest1 ) )
+    {
+        pTruth1_copy = ~ pTruth1_copy;
+    }
+    // word dcba
+    // iteration 0 has cba as three input LUT, 1 = dba, 2 = dca, 3 = dcb.
+    for(int iter_var=0; iter_var < 4; iter_var++)
+    {
+        // Apply the shift-to-front operation
+        Abc_TtShift( &pTruth0_copy, 1, 4, iter_var);
+        Abc_TtShift( &pTruth1_copy, 1, 4, iter_var);
+
+        // Then call dec1 with the updated truth tables
+        if( dec1(pTruth0_copy, pTruth1_copy) )
+        {
+            printf( "decomposition found: %i \n", iter_var );
+            break;
+        }
+    }
+
+    assert( !pIfMan->pPars->fUseTtPerm );
+    return Kit_TruthToHop( (Hop_Man_t *)pMan, (unsigned *)pTruth0, If_CutLeaveNum(pCutBest), vCover );
+}
+
+Abc_Obj_t * Abc_NodeFromIfDec_rec( Abc_Ntk_t * pNtk, Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Obj_t * pIfObj, Vec_Int_t * vCover )
+{
+    Abc_Obj_t * pNode, * pNodeNew;
+    If_Cut_t * pCutBest;
+    If_Obj_t * pIfLeaf;
+    int i;
+    // return if the result is known
+    pNodeNew = (Abc_Obj_t *)If_ObjCopy( pIfObj );
+    if ( pNodeNew )
+        return pNodeNew;
+    assert( pIfObj->Type == IF_AND );
+
+    // get the parameters of the best cut
+    pCutBest = If_ObjCutBest( pIfObj );
+    if ( pIfMan->pPars->fUserSesLib )
+    {
+        // create the subgraph composed of Abc_Obj_t nodes based on the given cut
+        Abc_Obj_t * pFanins[IF_MAX_FUNC_LUTSIZE];
+        If_CutForEachLeaf( pIfMan, pCutBest, pIfLeaf, i )
+            pFanins[i] = Abc_NodeFromIfDec_rec(pNtk, pNtkNew, pIfMan, pIfLeaf, vCover);
+        pNodeNew = Abc_ExactBuildNode( If_CutTruthW(pIfMan, pCutBest), If_CutLeaveNum(pCutBest), If_CutArrTimeProfile(pIfMan, pCutBest), pFanins, pNtkNew );
+        If_ObjSetCopy( pIfObj, pNodeNew );
+        return pNodeNew;
+    }
+    // create a new node
+    pNodeNew = Abc_NtkCreateNode( pNtkNew );
+
+//    if ( pIfMan->pPars->pLutLib && pIfMan->pPars->pLutLib->fVarPinDelays )
+    if ( !pIfMan->pPars->fDelayOpt && !pIfMan->pPars->fDelayOptLut && !pIfMan->pPars->fDsdBalance && !pIfMan->pPars->fUseTtPerm &&
+         !pIfMan->pPars->pLutStruct && !pIfMan->pPars->fUserRecLib && !pIfMan->pPars->fUserSesLib && !pIfMan->pPars->fUserLutDec && !pIfMan->pPars->nGateSize )
+        If_CutRotatePins( pIfMan, pCutBest );
+
+
+    if ( pIfMan->pPars->fUseCnfs || pIfMan->pPars->fUseMv )
+    {
+        If_CutForEachLeafReverse( pIfMan, pCutBest, pIfLeaf, i )
+            Abc_ObjAddFanin( pNodeNew, Abc_NodeFromIfDec_rec(pNtk, pNtkNew, pIfMan, pIfLeaf, vCover) );
+    }
+    else
+    {
+        If_CutForEachLeaf( pIfMan, pCutBest, pIfLeaf, i )
+            Abc_ObjAddFanin( pNodeNew, Abc_NodeFromIfDec_rec(pNtk, pNtkNew, pIfMan, pIfLeaf, vCover) );
+    }
+    // set the level of the new node
+    pNodeNew->Level = Abc_ObjLevelNew( pNodeNew );
+    // derive the function of this node
+    if ( pIfMan->pPars->fTruth )
+    {
+        if ( pIfMan->pPars->fUseBdds )
+        {
+            // transform truth table into the BDD
+#ifdef ABC_USE_CUDD
+            pNodeNew->pData = Kit_TruthToBdd( (DdManager *)pNtkNew->pManFunc, If_CutTruth(pIfMan, pCutBest), If_CutLeaveNum(pCutBest), 0 );  Cudd_Ref((DdNode *)pNodeNew->pData);
+#endif
+        }
+        else if ( pIfMan->pPars->fUseCnfs || pIfMan->pPars->fUseMv )
+        {
+            // transform truth table into the BDD
+#ifdef ABC_USE_CUDD
+            pNodeNew->pData = Kit_TruthToBdd( (DdManager *)pNtkNew->pManFunc, If_CutTruth(pIfMan, pCutBest), If_CutLeaveNum(pCutBest), 1 );  Cudd_Ref((DdNode *)pNodeNew->pData);
+#endif
+        }
+        else if ( pIfMan->pPars->fUseSops || pIfMan->pPars->nGateSize > 0 )
+        {
+            // transform truth table into the SOP
+            int RetValue = Kit_TruthIsop( If_CutTruth(pIfMan, pCutBest), If_CutLeaveNum(pCutBest), vCover, 1 );
+            assert( RetValue == 0 || RetValue == 1 );
+            // check the case of constant cover
+            if ( Vec_IntSize(vCover) == 0 || (Vec_IntSize(vCover) == 1 && Vec_IntEntry(vCover,0) == 0) )
+            {
+                assert( RetValue == 0 );
+                pNodeNew->pData = Abc_SopCreateAnd( (Mem_Flex_t *)pNtkNew->pManFunc, If_CutLeaveNum(pCutBest), NULL );
+                pNodeNew = (Vec_IntSize(vCover) == 0) ? Abc_NtkCreateNodeConst0(pNtkNew) : Abc_NtkCreateNodeConst1(pNtkNew);
+            }
+            else
+            {
+                // derive the AIG for that tree
+                pNodeNew->pData = Abc_SopCreateFromIsop( (Mem_Flex_t *)pNtkNew->pManFunc, If_CutLeaveNum(pCutBest), vCover );
+                if ( RetValue )
+                    Abc_SopComplement( (char *)pNodeNew->pData );
+            }
+        }
+        else if ( pIfMan->pPars->fDelayOpt )
+            pNodeNew->pData = Abc_NodeBuildFromMini( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, pCutBest, 0 );
+        else if ( pIfMan->pPars->fDsdBalance )
+            pNodeNew->pData = Abc_NodeBuildFromMini( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, pCutBest, 1 );
+        else if ( pIfMan->pPars->fUserRecLib )
+        {
+            extern Hop_Obj_t * Abc_RecToHop3( Hop_Man_t * pMan, If_Man_t * pIfMan, If_Cut_t * pCut, If_Obj_t * pIfObj );
+            pNodeNew->pData = Abc_RecToHop3( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, pCutBest, pIfObj );
+        }
+        else if ( pIfMan->pPars->fUserLutDec )
+        {
+            extern Hop_Obj_t * Abc_DecRecordToHopCros( Abc_Ntk_t * pNtk, Hop_Man_t * pMan, If_Man_t * pIfMan, If_Cut_t * pCut, If_Obj_t * pIfObj, Vec_Int_t * vMemory );
+            pNodeNew->pData = Abc_DecRecordToHopCros( pNtk, (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, pCutBest, pIfObj, vCover );
+        }
+        else
+        {
+            extern Hop_Obj_t * Kit_TruthToHop( Hop_Man_t * pMan, unsigned * pTruth, int nVars, Vec_Int_t * vMemory );
+            word * pTruth = If_CutTruthW(pIfMan, pCutBest);
+            if ( pIfMan->pPars->fUseTtPerm )
+                for ( i = 0; i < (int)pCutBest->nLeaves; i++ )
+                    if ( If_CutLeafBit(pCutBest, i) )
+                        Abc_TtFlip( pTruth, Abc_TtWordNum(pCutBest->nLeaves), i );
+            pNodeNew->pData = Kit_TruthToHop( (Hop_Man_t *)pNtkNew->pManFunc, (unsigned *)pTruth, If_CutLeaveNum(pCutBest), vCover );
+//            if ( pIfMan->pPars->fUseBat )
+//                Bat_ManFuncPrintCell( *pTruth );
+        }
+        // complement the node if the cut was complemented
+        if ( pCutBest->fCompl && !pIfMan->pPars->fDelayOpt && !pIfMan->pPars->fDsdBalance )
+            Abc_NodeComplement( pNodeNew );
+    }
+    else
+    {
+        pNodeNew->pData = Abc_NodeIfToHop( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, pIfObj );
+    }
+    If_ObjSetCopy( pIfObj, pNodeNew );
+    return pNodeNew;
 }
 
 /**Function*************************************************************
@@ -939,6 +1392,22 @@ Abc_Obj_t * Abc_NodeFromIf_rec( Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Obj_t
     if ( pNodeNew )
         return pNodeNew;
     assert( pIfObj->Type == IF_AND );
+    /*printf("ObjId: %i\n", pIfObj->Id);
+    // Create a subnetwork for an pObj
+    If_DecSubNtk_t *subnetwork = ABC_ALLOC(If_DecSubNtk_t, 1);
+    subnetwork->id = pIfObj->Id;
+    subnetwork->luts = Vec_PtrAlloc(10); // Or whatever size you need.
+    // You can push the LUTs to the subnetwork like this:
+    If_DecLut_t *lut = ABC_ALLOC(If_DecLut_t, 1);
+    lut->truth_table = 1;
+    lut->fan_in_luts = Vec_PtrAlloc(10);
+    Vec_PtrPush(subnetwork->luts, lut);
+    // Free every lut in every subnetwork
+    Vec_PtrFree( lut->fan_in_luts );
+    ABC_FREE( lut );
+    Vec_PtrFree( subnetwork->luts );
+    ABC_FREE( subnetwork );*/
+
     // get the parameters of the best cut
     pCutBest = If_ObjCutBest( pIfObj );
     if ( pIfMan->pPars->fUserSesLib )
@@ -951,7 +1420,15 @@ Abc_Obj_t * Abc_NodeFromIf_rec( Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Obj_t
         If_ObjSetCopy( pIfObj, pNodeNew );
         return pNodeNew;
     }
-    // create a new node 
+    //
+    // If_DecSubNtk_t* subnetwork = ABC_ALLOC(If_DecSubNtk_t, 1);
+    // pIfObj->vVirtualLut = subnetwork;
+    // pIfObj->vVirtualLut = NULL;
+    // ABC_FREE(subnetwork);
+    // create a new node
+    // Instead of creating one new node: Crate a subnetwork by creating nodes and their fan-ins
+    // The number of created nodes is the size of vVirtual + 1 ( for the root node )
+    // the 'virtual'(VirtualLUT) and 'real'(IfObj) Fanins are stored inside the new struct VirtualLUT
     pNodeNew = Abc_NtkCreateNode( pNtkNew );
 //    if ( pIfMan->pPars->pLutLib && pIfMan->pPars->pLutLib->fVarPinDelays )
     if ( !pIfMan->pPars->fDelayOpt && !pIfMan->pPars->fDelayOptLut && !pIfMan->pPars->fDsdBalance && !pIfMan->pPars->fUseTtPerm && 
@@ -964,6 +1441,7 @@ Abc_Obj_t * Abc_NodeFromIf_rec( Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Obj_t
     }
     else
     {
+        // ForEachLeaf of the original cut the right pNodeNew has to be selected to get his fan-in created
         If_CutForEachLeaf( pIfMan, pCutBest, pIfLeaf, i )
             Abc_ObjAddFanin( pNodeNew, Abc_NodeFromIf_rec(pNtkNew, pIfMan, pIfLeaf, vCover) );
     }

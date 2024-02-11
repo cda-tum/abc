@@ -322,6 +322,29 @@ struct If_Set_t_
     If_Cut_t **        ppCuts;        // the array of pointers to the cuts
 };
 
+typedef struct If_DecLut_t_   If_DecLut_t;
+struct If_DecLut_t_
+{
+    // a representation of the LUT's truth table and other attributes
+    int truth_table;
+    int visited;                // visited mark
+
+    // pointer to list of fanin LUTs
+    Vec_Ptr_t * vVirFis;        // 'virtual' fan-ins - meas other 'If_DecLut_t_'
+    Vec_Ptr_t * vReaFis;        // 'real' fan-ins - means other 'pIfObjs'
+};
+
+typedef struct If_DecSubNtk_t_   If_DecSubNtk_t;
+struct If_DecSubNtk_t_
+{
+    int             Id;         // ObjId
+    int             SharedId;   // Decomposition already exists for this Id
+    int             hasDec;     // is already part of a decomposition
+    // Vector of LUTs in the subnetwork
+    If_DecLut_t *     LutId;
+    If_DecLut_t *     LutSharedId;
+};
+
 // node extension
 struct If_Obj_t_
 {
