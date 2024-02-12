@@ -113,6 +113,7 @@ struct If_Par_t_
     int                nAndDelay;     // delay of AND-gate in LUT library units
     int                nAndArea;      // area of AND-gate in LUT library units
     int                fPreprocess;   // preprossing
+    int                fRedCros;      // reduce crossings
     int                fArea;         // area-oriented mapping
     int                fFancy;        // a fancy feature
     int                fExpRed;       // expand/reduce of the best cuts
@@ -326,12 +327,14 @@ typedef struct If_DecLut_t_   If_DecLut_t;
 struct If_DecLut_t_
 {
     // a representation of the LUT's truth table and other attributes
-    int truth_table;
-    int visited;                // visited mark
+    word            truth_table;           // truth table representation
+    int             visited;                // visited mark
+    int             nVars;
 
     // pointer to list of fanin LUTs
-    Vec_Ptr_t * vVirFis;        // 'virtual' fan-ins - meas other 'If_DecLut_t_'
-    Vec_Ptr_t * vReaFis;        // 'real' fan-ins - means other 'pIfObjs'
+    If_DecLut_t *   pVirtFi;       // 'virtual' fan-in - meas other 'If_DecLut_t_'
+    int *           vRealFis;       // 'real' fan-ins - means other 'pIfObjs'
+    int             nRealFis;       // number of 'real' fan-ins
 };
 
 typedef struct If_DecSubNtk_t_   If_DecSubNtk_t;
@@ -339,10 +342,11 @@ struct If_DecSubNtk_t_
 {
     int             Id;         // ObjId
     int             SharedId;   // Decomposition already exists for this Id
-    int             hasDec;     // is already part of a decomposition
     // Vector of LUTs in the subnetwork
-    If_DecLut_t *     LutId;
-    If_DecLut_t *     LutSharedId;
+    If_DecLut_t *     pLutId;
+    If_DecLut_t *     pLutSharedId;
+    Vec_Ptr_t   *     vLut;
+    void *            pSharedNode;
 };
 
 // node extension

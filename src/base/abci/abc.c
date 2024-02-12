@@ -19447,7 +19447,7 @@ int Abc_CommandIf( Abc_Frame_t * pAbc, int argc, char ** argv )
     If_ManSetDefaultPars( pPars );
     pPars->pLutLib = (If_LibLut_t *)Abc_FrameReadLibLut();
     Extra_UtilGetoptReset();
-    while ( ( c = Extra_UtilGetopt( argc, argv, "KCFAGRNTXYDEWSqaflepmrsdbgxyzuojiktncvh" ) ) != EOF )
+    while ( ( c = Extra_UtilGetopt( argc, argv, "KCFAGRNTXYDEWSwqaflepmrsdbgxyzuojiktncvh" ) ) != EOF )
     {
         switch ( c )
         {
@@ -19609,6 +19609,9 @@ int Abc_CommandIf( Abc_Frame_t * pAbc, int argc, char ** argv )
                 Abc_Print( -1, "Command line switch \"-S\" should be followed by a 2- or 3-char string (e.g. \"44\" or \"555\").\n" );
                 goto usage;
             }
+            break;
+        case 'w':
+            pPars->fRedCros ^= 1;
             break;
         case 'q':
             pPars->fPreprocess ^= 1;
@@ -19810,7 +19813,7 @@ int Abc_CommandIf( Abc_Frame_t * pAbc, int argc, char ** argv )
         pPars->pLutLib     =  NULL;
     }
     // modify for delay optimization
-    if ( pPars->fDelayOpt || pPars->fDsdBalance || pPars->fDelayOptLut || pPars->fUserLutDec )
+    if ( pPars->fDelayOpt || pPars->fDsdBalance || pPars->fDelayOptLut || pPars->fUserLutDec || pPars->fRedCros )
     {
         pPars->fTruth      =  1;
         pPars->fCutMin     =  1;
@@ -19972,6 +19975,7 @@ usage:
     Abc_Print( -2, "\t-E float : sets epsilon used for tie-breaking [default = %f]\n", pPars->Epsilon );
     Abc_Print( -2, "\t-W float : sets wire delay between adjects LUTs [default = %f]\n", pPars->WireDelay );
     Abc_Print( -2, "\t-S str   : string representing the LUT structure [default = %s]\n", pPars->pLutStruct ? pPars->pLutStruct : "not used" );
+    Abc_Print( -2, "\t-w       : toggles reduction of crossings [default = %s]\n", pPars->fRedCros? "yes": "no" );
     Abc_Print( -2, "\t-q       : toggles preprocessing using several starting points [default = %s]\n", pPars->fPreprocess? "yes": "no" );
     Abc_Print( -2, "\t-a       : toggles area-oriented mapping [default = %s]\n", pPars->fArea? "yes": "no" );
     Abc_Print( -2, "\t-r       : enables expansion/reduction of the best cuts [default = %s]\n", pPars->fExpRed? "yes": "no" );
