@@ -36,7 +36,7 @@ ABC_NAMESPACE_IMPL_START
 extern If_Man_t *  Abc_NtkToIf( Abc_Ntk_t * pNtk, If_Par_t * pPars );
 static Abc_Ntk_t * Abc_NtkFromIf( If_Man_t * pIfMan, Abc_Ntk_t * pNtk );
 extern Abc_Obj_t * Abc_NodeFromIf_rec( Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Obj_t * pIfObj, Vec_Int_t * vCover );
-extern Abc_Obj_t * Abc_NodeFromIfDec_rec( Abc_Ntk_t * pNtk, Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Obj_t * pIfObj, Vec_Int_t * vCover, Vec_Ptr_t * vDecSubNtk );
+extern Abc_Obj_t * Abc_NodeFromIfDec_rec( Abc_Ntk_t * pNtk, Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Obj_t * pIfObj, Vec_Int_t * vCover, Vec_Ptr_t * vDecSubNtk, Vec_Int_t * vUsedNodes );
 static Hop_Obj_t * Abc_NodeIfToHop( Hop_Man_t * pHopMan, If_Man_t * pIfMan, If_Obj_t * pIfObj );
 static Vec_Ptr_t * Abc_NtkFindGoodOrder( Abc_Ntk_t * pNtk );
 
@@ -112,6 +112,7 @@ Abc_Ntk_t * If_ManReduceCrossings( If_Man_t * pIfMan, Abc_Ntk_t * pNtk )
     Abc_Ntk_t * pNtkNew;
     Abc_Obj_t * pNode, * pNodeNew;
     Vec_Int_t * vCover;
+    Vec_Int_t * vUsedNodes = Vec_IntAlloc(10);
     Vec_Ptr_t * vDecSubNtk = Vec_PtrAlloc(10);  // Storage for the decomposition networks
     int i, nDupGates;
     // create the new network
@@ -135,12 +136,18 @@ Abc_Ntk_t * If_ManReduceCrossings( If_Man_t * pIfMan, Abc_Ntk_t * pNtk )
     Abc_NtkForEachCo( pNtk, pNode, i )
     {
         Extra_ProgressBarUpdate( pProgress, i, "Final" );
-        pNodeNew = Abc_NodeFromIfDec_rec( pNtk, pNtkNew, pIfMan, If_ObjFanin0(If_ManCo(pIfMan, i)), vCover, vDecSubNtk );
+        pNodeNew = Abc_NodeFromIfDec_rec( pNtk, pNtkNew, pIfMan, If_ObjFanin0(If_ManCo(pIfMan, i)), vCover, vDecSubNtk, vUsedNodes );
         pNodeNew = Abc_ObjNotCond( pNodeNew, If_ObjFaninC0(If_ManCo(pIfMan, i)) );
         Abc_ObjAddFanin( pNode->pCopy, pNodeNew );
     }
+    /*int no;
+    Vec_IntForEachEntry( vUsedNodes, no, i )
+    {
+        printf("Vec_Ptr_Int entries: %i\n", no);
+    }*/
     Extra_ProgressBarStop( pProgress );
     Vec_IntFree( vCover );
+    Vec_IntFree( vUsedNodes );
     freeSubnetworks( vDecSubNtk );
 
     // remove the constant node if not used
@@ -161,6 +168,17 @@ Abc_Ntk_t * If_ManReduceCrossings( If_Man_t * pIfMan, Abc_Ntk_t * pNtk )
         else
             printf( "Duplicated %d gates to decouple the CO drivers.\n", nDupGates );
     }
+    /*Abc_Obj_t * Test_N, * Test_Fi;
+    int x, y;
+    Abc_NtkForEachObj(pNtkNew, Test_N, x )
+    {
+        printf("NtkNew - Obj Id: %i\n", Test_N->Id);
+        Abc_ObjForEachFanin( Test_N, Test_Fi, y )
+        {
+            printf("NtkNew - Fanins: %i\n", Test_Fi->Id);
+        }
+    }*/
+
     return pNtkNew;
 }
 
@@ -522,7 +540,7 @@ Hop_Obj_t * Abc_DecRecordToHop( Hop_Man_t * pMan, If_Man_t * pIfMan, If_Cut_t * 
   SeeAlso     [NEW FUNC]
 
 ***********************************************************************/
-Abc_Obj_t * Abc_NodeFromIfDec_rec( Abc_Ntk_t * pNtk, Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Obj_t * pIfObj, Vec_Int_t * vCover, Vec_Ptr_t * vDecSubNtk )
+Abc_Obj_t * Abc_NodeFromIfDec_rec( Abc_Ntk_t * pNtk, Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Obj_t * pIfObj, Vec_Int_t * vCover, Vec_Ptr_t * vDecSubNtk, Vec_Int_t * vUsedNodes )
 {
     Abc_Obj_t * pNode, * pNodeNew;
     If_Cut_t * pCutBest;
@@ -541,7 +559,7 @@ Abc_Obj_t * Abc_NodeFromIfDec_rec( Abc_Ntk_t * pNtk, Abc_Ntk_t * pNtkNew, If_Man
         // create the subgraph composed of Abc_Obj_t nodes based on the given cut
         Abc_Obj_t * pFanins[IF_MAX_FUNC_LUTSIZE];
         If_CutForEachLeaf( pIfMan, pCutBest, pIfLeaf, i )
-            pFanins[i] = Abc_NodeFromIfDec_rec(pNtk, pNtkNew, pIfMan, pIfLeaf, vCover, vDecSubNtk);
+            pFanins[i] = Abc_NodeFromIfDec_rec(pNtk, pNtkNew, pIfMan, pIfLeaf, vCover, vDecSubNtk, vUsedNodes);
         pNodeNew = Abc_ExactBuildNode( If_CutTruthW(pIfMan, pCutBest), If_CutLeaveNum(pCutBest), If_CutArrTimeProfile(pIfMan, pCutBest), pFanins, pNtkNew );
         If_ObjSetCopy( pIfObj, pNodeNew );
         return pNodeNew;
@@ -558,12 +576,12 @@ Abc_Obj_t * Abc_NodeFromIfDec_rec( Abc_Ntk_t * pNtk, Abc_Ntk_t * pNtkNew, If_Man
     if ( pIfMan->pPars->fUseCnfs || pIfMan->pPars->fUseMv )
     {
         If_CutForEachLeafReverse( pIfMan, pCutBest, pIfLeaf, i )
-            Abc_ObjAddFanin( pNodeNew, Abc_NodeFromIfDec_rec(pNtk, pNtkNew, pIfMan, pIfLeaf, vCover, vDecSubNtk) );
+            Abc_ObjAddFanin( pNodeNew, Abc_NodeFromIfDec_rec(pNtk, pNtkNew, pIfMan, pIfLeaf, vCover, vDecSubNtk, vUsedNodes) );
     }
     else
     {
         If_CutForEachLeaf( pIfMan, pCutBest, pIfLeaf, i )
-            Abc_ObjAddFanin( pNodeNew, Abc_NodeFromIfDec_rec(pNtk, pNtkNew, pIfMan, pIfLeaf, vCover, vDecSubNtk) );
+            Abc_ObjAddFanin( pNodeNew, Abc_NodeFromIfDec_rec(pNtk, pNtkNew, pIfMan, pIfLeaf, vCover, vDecSubNtk, vUsedNodes) );
     }
     // set the level of the new node
     pNodeNew->Level = Abc_ObjLevelNew( pNodeNew );
@@ -621,71 +639,95 @@ Abc_Obj_t * Abc_NodeFromIfDec_rec( Abc_Ntk_t * pNtk, Abc_Ntk_t * pNtkNew, If_Man
         else if ( pIfMan->pPars->fRedCros )
         {
             // extern Hop_Obj_t * Abc_DecSubNtkToHop( Hop_Man_t * pMan, If_Man_t * pIfMan, If_Cut_t * pCut, If_Obj_t * pIfObj, Vec_Int_t * vMemory );
-            extern If_DecSubNtk_t * Abc_DecRecordToHopCros( Abc_Ntk_t * pNtk, Hop_Man_t * pMan, If_Man_t * pIfMan, If_Cut_t * pCut, If_Obj_t * pIfObj, Vec_Int_t * vMemory );
+            extern If_DecSubNtk_t * Abc_DecRecordToHopCros( Abc_Ntk_t * pNtk, Hop_Man_t * pMan, If_Man_t * pIfMan, If_Cut_t * pCut, If_Obj_t * pIfObj, Vec_Int_t * vMemory, Vec_Int_t * vUsedNodes );
             // pNodeNew->pData = Abc_DecRecordToHop( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, pCutBest, pIfObj, vCover );
 
             int sub_ntk_size = Vec_PtrSize(vDecSubNtk);
             If_DecSubNtk_t * pDec = NULL;
             for (int j = 0; j < sub_ntk_size; j++) {
                 pDec = (If_DecSubNtk_t *)Vec_PtrEntry(vDecSubNtk, j);
+                // printf( "SharedId: %i, ObjId: %i", pDec->SharedId, pIfObj->Id );
                 if (pDec->SharedId == pIfObj->Id) {
-                    printf( "Node %i is already part of a subnetwork\n", pIfObj->Id );
+                    // printf( "Node %i is already part of a subnetwork\n", pIfObj->Id );
                     If_DecLut_t * RLut = pDec->pLutSharedId;
                     printf( "RLut:\n" );
                     printBits( RLut->truth_table );
 
                     Abc_ObjRemoveFanins(pNodeNew);
+
                     int * Fis = RLut->vRealFis;
+                    Abc_ObjAddFanin(pNodeNew, pDec->pSharedNode);
                     for (int k = 0; k < RLut->nRealFis; k++) {
                         int Id = Fis[k];
                         Abc_ObjAddFanin(pNodeNew, Abc_NtkObj( pNtkNew, Id ));
                     }
-                    Abc_ObjAddFanin(pNodeNew, pDec->pSharedNode);
+                    // Abc_ObjAddFanin(pNodeNew, pDec->pSharedNode);
+                    // word * truth = &RLut->truth_table;
+                   /* word truth = convertTo64Bit( (word) 1, 4 );
+                    printf("Testing Bits:\n");
+                    printBits( truth );*/
                     pNodeNew->pData = Abc_DecSubNtkToHop( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, vCover, &RLut->truth_table, RLut->nVars );
                     break;  // exit the loop as we found the required subnetwork
                 }
-                pDec = NULL; // Reset pDec to NULL, so it will be NULL if no matching subnetwork is found
+                else
+                    pDec = NULL; // Reset pDec to NULL, so it will be NULL if no matching subnetwork is found
             }
             if(!pDec)
             {
-                pDec = Abc_DecRecordToHopCros( pNtk, (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, pCutBest, pIfObj, vCover );
-
-                If_DecLut_t * LLut = pDec->pLutId;
-
-                printf( "LLut:\n" );
-                printBits( LLut->truth_table );
-                If_DecLut_t * SLut = LLut->pVirtFi;
-                printf( "SLut:\n" );
-                printBits( SLut->truth_table );
-
-                assert(pIfObj->Id == pDec->Id);
-
-                // create and fill the virtual node
-                Abc_Obj_t * pVirNode;
-                pVirNode = Abc_NtkCreateNode( pNtkNew );
-                pDec->pSharedNode = pVirNode;
-
-                int * Fis = SLut->vRealFis;
-                for (int j = 0; j < SLut->nRealFis; j++) {
-                    int Id = Fis[j];
-                    Abc_ObjAddFanin(pVirNode, Abc_NtkObj( pNtkNew, Id ));
+                // printf( "Node %i\n", pIfObj->Id );
+                pDec = Abc_DecRecordToHopCros( pNtk, (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, pCutBest, pIfObj, vCover, vUsedNodes );
+                if (pDec == NULL)
+                {
+                    pNodeNew->pData = Abc_DecRecordToHop( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, pCutBest, pIfObj, vCover );
                 }
-                pVirNode->pData = Abc_DecSubNtkToHop( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, vCover, &SLut->truth_table, SLut->nVars );
+                else
+                {
+                    If_DecLut_t * LLut = pDec->pLutId;
 
-                Abc_ObjRemoveFanins(pNodeNew);
-                Abc_ObjAddFanin(pNodeNew, pVirNode);
-                Fis = LLut->vRealFis;
-                for (int j = 0; j <LLut->nRealFis; j++) {
-                    int Id = Fis[j];
-                    Abc_ObjAddFanin(pNodeNew, Abc_NtkObj( pNtkNew, Id ));
+                    If_DecLut_t * SLut = LLut->pVirtFi;
+                    printf( "LLut:\n" );
+                    printBits( LLut->truth_table );
+                    printf( "SLut:\n" );
+                    printBits( SLut->truth_table );
+
+                    assert(pIfObj->Id == pDec->Id);
+                    // mark these nodes as used
+                    Vec_IntPush( vUsedNodes, pDec->Id );
+                    Vec_IntPush( vUsedNodes, pDec->SharedId );
+
+                    // create and fill the virtual node
+                    Abc_Obj_t * pVirNode;
+                    pVirNode = Abc_NtkCreateNode( pNtkNew );
+                    pDec->pSharedNode = pVirNode;
+
+                    int * Fis = SLut->vRealFis;
+                    for (int j = 0; j < SLut->nRealFis; j++) {
+                        int Id = Fis[j];
+                        // printf( "The Fi Ids: %i\n", Id );
+                        Abc_ObjAddFanin(pVirNode, Abc_NtkObj( pNtkNew, Id ));
+                    }
+                    // this means the truth table also has to be shifted the right way !!!
+                    /*word truth = convertTo64Bit( (word) 4, 8 );
+                    printf("Testing Bits:\n");
+                    printBits( truth );*/
+                    //SLut->truth_table
+                    pVirNode->pData = Abc_DecSubNtkToHop( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, vCover, &SLut->truth_table, SLut->nVars );
+
+                    Abc_ObjRemoveFanins(pNodeNew);
+                    Abc_ObjAddFanin(pNodeNew, pVirNode);
+                    Fis = LLut->vRealFis;
+                    for (int j = 0; j <LLut->nRealFis; j++) {
+                        int Id = Fis[j];
+                        Abc_ObjAddFanin(pNodeNew, Abc_NtkObj( pNtkNew, Id ));
+                    }
+                    pNodeNew->pData = Abc_DecSubNtkToHop( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, vCover, &LLut->truth_table, LLut->nVars );
+
+                    // convert the LUT-structure into a set of logic nodes in Abc_Ntk_t
+                    // pNodeNew->pData = Abc_DecRecordToHop( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, pCutBest, pIfObj, vCover );
+
+                    // then add it to the vSubNtks
+                    Vec_PtrPush(vDecSubNtk, pDec);
                 }
-                pNodeNew->pData = Abc_DecSubNtkToHop( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, vCover, &LLut->truth_table, LLut->nVars );
-
-                // convert the LUT-structure into a set of logic nodes in Abc_Ntk_t
-                // pNodeNew->pData = Abc_DecRecordToHop( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, pCutBest, pIfObj, vCover );
-
-                // then add it to the vSubNtks
-                Vec_PtrPush(vDecSubNtk, pDec);
             }
         }
         else
@@ -706,6 +748,7 @@ Abc_Obj_t * Abc_NodeFromIfDec_rec( Abc_Ntk_t * pNtk, Abc_Ntk_t * pNtkNew, If_Man
     }
     else
     {
+        // printf( "Node %i is processed\n", pIfObj->Id );
         pNodeNew->pData = Abc_NodeIfToHop( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, pIfObj );
     }
     If_ObjSetCopy( pIfObj, pNodeNew );

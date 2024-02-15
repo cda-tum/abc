@@ -16,7 +16,6 @@
 
 extern If_Man_t *  Abc_NtkToIf( Abc_Ntk_t * pNtk, If_Par_t * pPars );
 extern Abc_Obj_t * Abc_NodeFromIf_rec( Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Obj_t * pIfObj, Vec_Int_t * vCover );
-extern Abc_Obj_t * Abc_NodeFromIfDec_rec( Abc_Ntk_t * pNtk, Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Obj_t * pIfObj, Vec_Int_t * vCover, Vec_Ptr_t * vDecSubNtk );
 static Hop_Obj_t * Abc_NodeIfToHop( Hop_Man_t * pHopMan, If_Man_t * pIfMan, If_Obj_t * pIfObj );
 
 extern void Abc_NtkBddReorder( Abc_Ntk_t * pNtk, int fVerbose );
@@ -152,22 +151,123 @@ void Abc_TtShift(word *pTruth, int nWords, int nVars, int nShifts) {
             break;
         }
         case 2: {
-            int indices[] = {1, 2, 1};
+            int indices[] = {2, 1};
             swapAdjacentIterations(pTruth, nWords, indices, sizeof(indices) / sizeof(indices[0]));
             break;
         }
         case 3: {
-            int indices[] = {0, 1, 2, 1, 0};
+            int indices[] = {2, 1, 0};
             swapAdjacentIterations(pTruth, nWords, indices, sizeof(indices) / sizeof(indices[0]));
             break;
         }
+        /*case 4: {
+            int indices[] = { 2 };
+            swapAdjacentIterations(pTruth, nWords, indices, sizeof(indices) / sizeof(indices[0]));
+            break;
+        }*/
 
         default:
-            printf("Invalid bit value\n");
+            printf("Invalid bit value %i\n", nShifts);
             break;
     }
 }
-int apply_operations( word lut4inp, word lut3inp, word lut2inp )
+int apply_operations1( word lut4inp, word lut3inp, word lut2inp )
+{
+    word bit1 = s_Truths6[0];
+    word bit2 = s_Truths6[2] ;
+    word bit3 = s_Truths6[1] ;
+    word bit4 = s_Truths6[0] ;
+
+    // bit1 = convertTo64Bit(bit1, 16);
+    word output = 0;
+    int bits_in_word = 4;
+    for (int bit = 0; bit < bits_in_word; ++bit) {
+        int do_operation = (lut2inp >> (bits_in_word - bit - 1)) & 1;
+
+        if ( do_operation )
+        {
+            switch (bit)
+            {
+                case 0:
+                    output = output | ( bit1 & lut3inp );
+                    break;
+
+                case 1:
+                    output = output | ( bit1 & ~lut3inp );
+                    break;
+
+                case 2:
+                    output = output | ( ~bit1 & lut3inp );
+                    break;
+
+                case 3:
+                    output = output | ( ~bit1 & ~lut3inp );
+                    break;
+
+                default:
+                    printf("Invalid bit value\n");
+                    break;
+            }
+        }
+    }
+    if( lut4inp == output )
+    {
+        return 1;
+    }
+
+
+    return 0;
+}
+int apply_operations( word lut4inp, word lut3inp, word lut2inp, int iter )
+{
+    int bit_num = 3 - iter;
+    word bit_mask = s_Truths6[bit_num];
+    /*word bit1 = s_Truths6[3];
+    word bit2 = s_Truths6[2] ;
+    word bit3 = s_Truths6[1] ;
+    word bit4 = s_Truths6[0] ;*/
+
+    // bit1 = convertTo64Bit(bit1, 16);
+    word output = 0;
+    int bits_in_word = 4;
+    for (int bit = 0; bit < bits_in_word; ++bit) {
+        int do_operation = (lut2inp >> (bits_in_word - bit - 1)) & 1;
+
+        if ( do_operation )
+        {
+            switch (bit)
+            {
+                case 0:
+                    output = output | ( bit_mask & lut3inp );
+                    break;
+
+                case 1:
+                    output = output | ( bit_mask & ~lut3inp );
+                    break;
+
+                case 2:
+                    output = output | ( ~bit_mask & lut3inp );
+                    break;
+
+                case 3:
+                    output = output | ( ~bit_mask & ~lut3inp );
+                    break;
+
+                default:
+                    printf("Invalid bit value\n");
+                    break;
+            }
+        }
+    }
+    if( lut4inp == output )
+    {
+        return 1;
+    }
+
+
+    return 0;
+}
+int apply_operations_dec2( word lut4inp, word lut3inp, word lut2inp )
 {
     word bit1 = 0xFF00 ;
     bit1 = convertTo64Bit(bit1, 16);
@@ -221,6 +321,32 @@ int apply_operations( word lut4inp, word lut3inp, word lut2inp )
   SeeAlso     []
 
 ***********************************************************************/
+void freeDecNtk(If_DecSubNtk_t* DecNtk) {
+    if(DecNtk)
+    {
+        if(DecNtk->vLut)
+        {
+            Vec_PtrFree(DecNtk->vLut);
+        }
+        free(DecNtk);
+    }
+}
+void freeSubnetwork(If_DecSubNtk_t* subNtk) {
+    if (subNtk->vLut)
+    {
+        for (int k = 0; k < Vec_PtrSize(subNtk->vLut); k++)
+        {
+            If_DecLut_t* lut = (If_DecLut_t*) Vec_PtrEntry(subNtk->vLut, k);
+            if(lut)
+            {
+                free(lut->vRealFis);
+                free(lut);
+            }
+        }
+        Vec_PtrFree(subNtk->vLut);
+    }
+    free(subNtk);
+}
 void freeSubnetworks(Vec_Ptr_t* vDecSubNtk) {
     printf( "%i subnetworks freed\n", Vec_PtrSize(vDecSubNtk) );
 
@@ -421,6 +547,41 @@ Hop_Obj_t * Abc_DecSubNtkToHop( Hop_Man_t * pMan, If_Man_t * pIfMan, Vec_Int_t *
     assert( !pIfMan->pPars->fUseTtPerm );
     return Kit_TruthToHop( (Hop_Man_t *)pMan, (unsigned *)pTruth, nVars, vCover );
 }
+int** reorderArrays(const int arr[]) {
+    int** reorderedArrays = (int**)malloc(4 * sizeof(int*));
+    if (reorderedArrays == NULL) {
+        printf("Memory allocation failed!\n");
+        exit(1);
+    }
+
+    for (int i = 0; i < 4; i++) {
+        reorderedArrays[i] = (int*)malloc(4 * sizeof(int));
+        if (reorderedArrays[i] == NULL) {
+            printf("Memory allocation failed!\n");
+            exit(1);
+        }
+    }
+
+    // Assign elements for each reordered array based on the given orderings
+    // Iterator 0: {4, 3, 2, 1}
+    // reorderedArrays[0][0] = arr[0]; reorderedArrays[0][1] = arr[1]; reorderedArrays[0][2] = arr[2]; reorderedArrays[0][3] = arr[3];
+    // Iterator 0: {4, 1, 2, 3}
+    reorderedArrays[0][0] = arr[0]; reorderedArrays[0][1] = arr[3]; reorderedArrays[0][2] = arr[2]; reorderedArrays[0][3] = arr[1];
+    // Iterator 1: {3, 4, 2, 1}
+    // reorderedArrays[1][0] = arr[1]; reorderedArrays[1][1] = arr[0]; reorderedArrays[1][2] = arr[2]; reorderedArrays[1][3] = arr[3];
+    // Iterator 1: {3, 1, 2, 4}
+    reorderedArrays[1][0] = arr[1]; reorderedArrays[1][1] = arr[3]; reorderedArrays[1][2] = arr[2]; reorderedArrays[1][3] = arr[0];
+    // Iterator 2: {2, 4, 3, 1}
+    // reorderedArrays[2][0] = arr[2]; reorderedArrays[2][1] = arr[0]; reorderedArrays[2][2] = arr[1]; reorderedArrays[2][3] = arr[3];
+    // Iterator 2: {2, 1, 3, 4}
+    reorderedArrays[2][0] = arr[2]; reorderedArrays[2][1] = arr[3]; reorderedArrays[2][2] = arr[1]; reorderedArrays[2][3] = arr[0];
+    // Iterator 3: {1, 4, 3, 2}
+    reorderedArrays[3][0] = arr[3]; reorderedArrays[3][1] = arr[0]; reorderedArrays[3][2] = arr[1]; reorderedArrays[3][3] = arr[2];
+    // Iterator 3: {1, 2, 3, 4}
+    reorderedArrays[3][0] = arr[3]; reorderedArrays[3][1] = arr[2]; reorderedArrays[3][2] = arr[1]; reorderedArrays[3][3] = arr[0];
+
+    return reorderedArrays;
+}
 
 /**Function*************************************************************
 
@@ -433,101 +594,132 @@ Hop_Obj_t * Abc_DecSubNtkToHop( Hop_Man_t * pMan, If_Man_t * pIfMan, Vec_Int_t *
   SeeAlso     []
 
 ***********************************************************************/
-int dec1( If_DecSubNtk_t * DecNtk, word four_inp_lut1, word four_inp_lut2, int * ci, int is_complement )
+int dec1( If_DecSubNtk_t * DecNtk, word four_inp_lut1, word four_inp_lut2, int * vLeaves,int is_complement )
 {
     int num_bits = 8;
     int size;
-    word* sequence = generate_binary_sequence(num_bits, &size);
-    word cur3inpLut, cur3inpLuttest;
-    // find a three input LUT
-    /*word* sequencetest = generate_binary_sequence(num_bits, &size);
-    for (int i = 8; i < size; ++i)
-    {
-        cur3inpLuttest = convertTo64Bit(sequencetest[i], num_bits );
-        printf("Before:\n");
-        printBits(cur3inpLuttest);
-        Abc_TtCircularShift( &cur3inpLuttest, 1, 4 );
-        printf("After:\n");
-        printBits(cur3inpLuttest);
-        break;
-    }*/
+    int * ci_sequence;
+    // int ci_sequences[4][4] = {{4, 3, 2, 1}, {3, 4, 2, 1}, {2, 4, 3, 1}, {1, 4, 3, 2}};
+    int ** ci_sequences = reorderArrays( vLeaves );
+    word* lut3sequence = generate_binary_sequence(num_bits, &size);
+    word cur3inpLut, cur3inpLutShifted;
     for (int i = 0; i < size; ++i)
     {
         int found_dec = 0;
-        cur3inpLut = convertTo64Bit(sequence[i], num_bits );
-        // check for correct decomposition for the first four input LUT
-        for (int j = 0; j < 16; j++)
+        cur3inpLut = convertTo64Bit(lut3sequence[i], num_bits );
+        // DEBUG
+        /*printf("Three input LUT: \n");
+        printBits(cur3inpLut);*/
+        for(int iter_var=0; iter_var < 4; iter_var++)
         {
-            found_dec = apply_operations(four_inp_lut1, cur3inpLut, (word) j);
-            if ( found_dec )
+            ci_sequence = ci_sequences[iter_var];
+            cur3inpLutShifted = cur3inpLut;
+            /*printf( "cur3inpLutShifted: \n" );
+            printBits(cur3inpLutShifted);*/
+            Abc_TtShift(&cur3inpLutShifted, 1, 4, iter_var);
+            // DEBUG
+            // printf("Three input LUT shifted: \n");
+            // printBits( cur3inpLutShifted );
+            // check for correct decomposition for the first four input LUT
+            for (int j = 0; j < 16; j++)
             {
-                /*printf("First Dec found: \n");
-                printBits(cur3inpLut);*/
-                // check for correct decomposition for the second four input LUT
-                for (int k = 0; k < 16; k++)
+                found_dec = apply_operations(four_inp_lut1, cur3inpLutShifted, (word) j, iter_var);
+                if (found_dec)
                 {
-                    // Abc_TtCircularShift( &cur3inpLut, 1, 4 );
-                    found_dec = apply_operations(four_inp_lut2, cur3inpLut, (word) k);
-                    if ( found_dec )
+                    // DEBUG
+                    /* printf("First Dec found: \n");
+                     printBits(cur3inpLut);
+                     printBits((word) j);*/
+                    // check for correct decomposition for the second four input LUT
+                    for (int k = 0; k < 16; k++)
                     {
-                        // handle the first two input LUT
-                        word tt = convertTo64Bit((word) j, 4);
-                        if ( is_complement == 1 || is_complement == 3 )
+                        found_dec = apply_operations(four_inp_lut2, cur3inpLutShifted, (word) k, iter_var);
+                        if (found_dec)
                         {
-                            tt = ~tt;
+                            printf("iter_var %i\n", iter_var);
+                            printf("is_complement %i\n", is_complement );
+                            // handle the first two input LUT
+                            word tt = convertTo64Bit((word) j, 4);
+                            if (is_complement == 1 || is_complement == 3) {
+                                tt = ~tt;
+                            }
+                            If_DecLut_t *pDecLut0 = createAndInitDecLut(DecNtk, tt, 1);
+                            pDecLut0->nVars = 2;
+                            // Add LUT to DecSubNtk_t
+                            DecNtk->pLutId = pDecLut0;
+
+                            // handle the second two input LUT
+                            tt = convertTo64Bit((word) k, 4);
+                            if (is_complement == 2 || is_complement == 3) {
+                                tt = ~tt;
+                            }
+                            If_DecLut_t *pDecLut1 = createAndInitDecLut(DecNtk, tt, 1);
+                            pDecLut1->nVars = 2;
+                            // Add LUT to DecSubNtk_t
+                            DecNtk->pLutSharedId = pDecLut1;
+
+                            // handle the three input LUT
+                            If_DecLut_t *pDecLut2 = createAndInitDecLut(DecNtk, cur3inpLut, 3);
+                            pDecLut2->nVars = 3;
+
+                            // create the right fan-in relationships
+                            pDecLut0->pVirtFi = pDecLut2;
+                            pDecLut1->pVirtFi = pDecLut2;
+                            pDecLut0->vRealFis[0] = ci_sequence[0];
+                            pDecLut0->nRealFis = 1;
+                            pDecLut1->vRealFis[0] = ci_sequence[0];
+                            pDecLut1->nRealFis = 1;
+                            for (int l = 0; l < 3; l++) {
+                                // printf("Sequence of Fis: %i\n", ci_sequence[l + 1]);
+                                pDecLut2->vRealFis[l] = ci_sequence[l + 1];
+                            }
+                            pDecLut2->nRealFis = 3;
+
+                            // DEBUG
+                            /*printf("Bit1 shift 0: \n");
+                            word bit1 = s_Truths6[3];
+                            word bit2 = s_Truths6[2] ;
+                            word bit3 = s_Truths6[1] ;
+                            word bit4 = s_Truths6[0] ;
+                            printBits(bit1);
+                            Abc_TtShift(&bit1, 1, 4, 2);
+                            printBits(bit1);*/
+                            // printf("Legal Decomposition\n");
+                            /*printf("Four input LUTs: \n");
+                            printBits(four_inp_lut1);
+                            printBits(four_inp_lut2);
+                            printf("Three input LUT: \n");
+                            printBits(cur3inpLut);
+                            printf("Three input LUT shifted: \n");
+                            printBits(cur3inpLutShifted);
+                            printf("Two input LUTs: \n");
+                            printBits(convertTo64Bit((word) j, 4));
+                            printBits(convertTo64Bit((word) k, 4));
+                            printf("Ci_sequence: ");
+                            for (int l = 0; l < 4; l++) {
+                                printf("%i ", ci_sequence[l]); // Free memory for each reordered array
+                            }
+                            printf("\n");*/
+
+                            free(lut3sequence);
+                            for (int l = 0; l < 4; l++) {
+                                free(ci_sequences[l]); // Free memory for each reordered array
+                            }
+                            free(ci_sequences); // Free memory for the array of reordered arrays
+                            return 1;
                         }
-                        If_DecLut_t * pDecLut0 = createAndInitDecLut(DecNtk, tt, 1);
-                        pDecLut0->nVars = 2;
-                        // Add LUT to DecSubNtk_t
-                        DecNtk->pLutId = pDecLut0;
-
-                        // handle the second two input LUT
-                        tt = convertTo64Bit((word) k, 4);
-                        if ( is_complement == 2 || is_complement == 3 )
-                        {
-                            tt = ~tt;
-                        }
-                        If_DecLut_t * pDecLut1 = createAndInitDecLut(DecNtk, tt, 1);
-                        pDecLut1->nVars = 2;
-                        // Add LUT to DecSubNtk_t
-                        DecNtk->pLutSharedId = pDecLut1;
-
-                        // handle the three input LUT
-                        If_DecLut_t * pDecLut2 = createAndInitDecLut(DecNtk, cur3inpLut, 3);
-                        pDecLut2->nVars = 3;
-
-                        // create the right fan-in relationships
-                        pDecLut0->pVirtFi = pDecLut2;
-                        pDecLut1->pVirtFi = pDecLut2;
-                        pDecLut0->vRealFis[0] = ci[0];
-                        pDecLut0->nRealFis = 1;
-                        pDecLut1->vRealFis[0] = ci[0];
-                        pDecLut1->nRealFis = 1;
-                        for (int l = 0; l < 3; l++) {
-                            pDecLut2->vRealFis[l] = ci[l+1];
-                        }
-                        pDecLut2->nRealFis = 3;
-
-                        /*printf("Four input LUTs: \n");
-                        printBits(four_inp_lut1);
-                        printBits(four_inp_lut2);
-                        printf("Three input LUT: \n");
-                        printBits(cur3inpLut);
-                        printf("Two input LUTs: \n");
-                        printBits(convertTo64Bit((word) j, 4));
-                        printBits(convertTo64Bit((word) k, 4));*/
-
-                        free(sequence);
-                        return 1;
                     }
                 }
             }
-
         }
     }
 
     // Free dynamically allocated memory
-    free(sequence);
+    free(lut3sequence);
+    for (int l = 0; l < 4; l++) {
+        free(ci_sequences[l]); // Free memory for each reordered array
+    }
+    free(ci_sequences); // Free memory for the array of reordered arrays
     return 0;
 }
 /**Function*************************************************************
@@ -545,97 +737,93 @@ int dec2( If_DecSubNtk_t * DecNtk, word four_inp_lut1, word four_inp_lut2, int *
 {
     int num_bits = 8;
     int size;
-    word* sequence = generate_binary_sequence(num_bits, &size);
-    word cur3inpLut, cur3inpLuttest;
-    // find a three input LUT
-    /*word* sequencetest = generate_binary_sequence(num_bits, &size);
-    for (int i = 8; i < size; ++i)
-    {
-        cur3inpLuttest = convertTo64Bit(sequencetest[i], num_bits );
-        printf("Before:\n");
-        printBits(cur3inpLuttest);
-        Abc_TtCircularShift( &cur3inpLuttest, 1, 4 );
-        printf("After:\n");
-        printBits(cur3inpLuttest);
-        break;
-    }*/
+    int * ci_sequence;
+    int ci_sequences[4][4] = {{4, 1, 2, 3}, {3, 1, 2, 4}, {2, 1, 3, 4}, {1, 2, 3, 4}};
+    word* lut3sequence = generate_binary_sequence(num_bits, &size);
+    word cur3inpLut, cur3inpLutShifted;
     for (int i = 0; i < size; ++i)
     {
         int found_dec = 0;
-        cur3inpLut = convertTo64Bit(sequence[i], num_bits );
-        // check for correct decomposition for the first four input LUT
-        for (int j = 0; j < 16; j++)
+        cur3inpLut = convertTo64Bit(lut3sequence[i], num_bits );
+        for(int iter_var=0; iter_var < 4; iter_var++)
         {
-            found_dec = apply_operations(four_inp_lut1, cur3inpLut, (word) j);
-            if ( found_dec )
+            ci_sequence = ci_sequences[iter_var];
+            cur3inpLutShifted = cur3inpLut;
+            Abc_TtShift(&cur3inpLutShifted, 1, 4, iter_var);
+            // printBits( cur3inpLutShifted );
+            // check for correct decomposition for the first four input LUT
+            for (int j = 0; j < 16; j++)
             {
-                /*printf("First Dec found: \n");
-                printBits(cur3inpLut);*/
-                // check for correct decomposition for the second four input LUT
-                for (int k = 0; k < 16; k++)
+                found_dec = apply_operations(four_inp_lut1, cur3inpLutShifted, (word) j, iter_var);
+                if (found_dec)
                 {
-                    // Abc_TtCircularShift( &cur3inpLut, 1, 4 );
-                    found_dec = apply_operations(four_inp_lut2, cur3inpLut, (word) k);
-                    if ( found_dec )
+                    /* printf("First Dec found: \n");
+                     printBits(cur3inpLut);
+                     printBits((word) j);*/
+                    // check for correct decomposition for the second four input LUT
+                    for (int k = 0; k < 16; k++)
                     {
-                        // handle the first two input LUT
-                        word tt = convertTo64Bit((word) j, 4);
-                        if ( is_complement == 1 || is_complement == 3 )
+                        found_dec = apply_operations(four_inp_lut2, cur3inpLutShifted, (word) k, iter_var);
+                        if (found_dec)
                         {
-                            tt = ~tt;
+                            // printf("iter_var %i\n", iter_var);
+                            // handle the first two input LUT
+                            word tt = convertTo64Bit((word) j, 4);
+                            if (is_complement == 1 || is_complement == 3) {
+                                tt = ~tt;
+                            }
+                            If_DecLut_t *pDecLut0 = createAndInitDecLut(DecNtk, tt, 1);
+                            pDecLut0->nVars = 2;
+                            // Add LUT to DecSubNtk_t
+                            DecNtk->pLutId = pDecLut0;
+
+                            // handle the second two input LUT
+                            tt = convertTo64Bit((word) k, 4);
+                            if (is_complement == 2 || is_complement == 3) {
+                                tt = ~tt;
+                            }
+                            If_DecLut_t *pDecLut1 = createAndInitDecLut(DecNtk, tt, 1);
+                            pDecLut1->nVars = 2;
+                            // Add LUT to DecSubNtk_t
+                            DecNtk->pLutSharedId = pDecLut1;
+
+                            // handle the three input LUT
+                            If_DecLut_t *pDecLut2 = createAndInitDecLut(DecNtk, cur3inpLut, 3);
+                            pDecLut2->nVars = 3;
+
+                            // create the right fan-in relationships
+                            pDecLut0->pVirtFi = pDecLut2;
+                            pDecLut1->pVirtFi = pDecLut2;
+                            pDecLut0->vRealFis[0] = ci_sequence[0];
+                            pDecLut0->nRealFis = 1;
+                            pDecLut1->vRealFis[0] = ci_sequence[0];
+                            pDecLut1->nRealFis = 1;
+                            for (int l = 0; l < 3; l++) {
+                                pDecLut2->vRealFis[l] = ci_sequence[l + 1];
+                            }
+                            pDecLut2->nRealFis = 3;
+
+                            // printf("Legal Decomposition\n");
+                            printf("Four input LUTs: \n");
+                            printBits(four_inp_lut1);
+                            printBits(four_inp_lut2);
+                            printf("Three input LUT: \n");
+                            printBits(cur3inpLut);
+                            printf("Two input LUTs: \n");
+                            printBits(convertTo64Bit((word) j, 4));
+                            printBits(convertTo64Bit((word) k, 4));
+
+                            free(lut3sequence);
+                            return 1;
                         }
-                        If_DecLut_t * pDecLut0 = createAndInitDecLut(DecNtk, tt, 1);
-                        pDecLut0->nVars = 2;
-                        // Add LUT to DecSubNtk_t
-                        DecNtk->pLutId = pDecLut0;
-
-                        // handle the second two input LUT
-                        tt = convertTo64Bit((word) k, 4);
-                        if ( is_complement == 2 || is_complement == 3 )
-                        {
-                            tt = ~tt;
-                        }
-                        If_DecLut_t * pDecLut1 = createAndInitDecLut(DecNtk, tt, 1);
-                        pDecLut1->nVars = 2;
-                        // Add LUT to DecSubNtk_t
-                        DecNtk->pLutSharedId = pDecLut1;
-
-                        // handle the three input LUT
-                        If_DecLut_t * pDecLut2 = createAndInitDecLut(DecNtk, cur3inpLut, 3);
-                        pDecLut2->nVars = 3;
-
-                        // create the right fan-in relationships
-                        pDecLut0->pVirtFi = pDecLut2;
-                        pDecLut1->pVirtFi = pDecLut2;
-                        pDecLut0->vRealFis[0] = ci[0];
-                        pDecLut0->nRealFis = 1;
-                        pDecLut1->vRealFis[0] = ci[0];
-                        pDecLut1->nRealFis = 1;
-                        for (int l = 0; l < 3; l++) {
-                            pDecLut2->vRealFis[l] = ci[l+1];
-                        }
-                        pDecLut2->nRealFis = 3;
-
-                        /*printf("Four input LUTs: \n");
-                        printBits(four_inp_lut1);
-                        printBits(four_inp_lut2);
-                        printf("Three input LUT: \n");
-                        printBits(cur3inpLut);
-                        printf("Two input LUTs: \n");
-                        printBits(convertTo64Bit((word) j, 4));
-                        printBits(convertTo64Bit((word) k, 4));*/
-
-                        free(sequence);
-                        return 1;
                     }
                 }
             }
-
         }
     }
 
     // Free dynamically allocated memory
-    free(sequence);
+    free(lut3sequence);
     return 0;
 }
 /**Function*************************************************************
@@ -649,7 +837,7 @@ int dec2( If_DecSubNtk_t * DecNtk, word four_inp_lut1, word four_inp_lut2, int *
   SeeAlso     []
 
 ***********************************************************************/
-If_DecSubNtk_t * Abc_DecRecordToHopCros( Abc_Ntk_t * pNtk, Hop_Man_t * pMan, If_Man_t * pIfMan, If_Cut_t * pCutBest, If_Obj_t * pIfObj, Vec_Int_t * vCover )
+If_DecSubNtk_t * Abc_DecRecordToHopCros( Abc_Ntk_t * pNtk, Hop_Man_t * pMan, If_Man_t * pIfMan, If_Cut_t * pCutBest, If_Obj_t * pIfObj, Vec_Int_t * vCover, Vec_Int_t * vUsedNodes )
 {
     Abc_Obj_t * pNode;
     If_Obj_t * foundNode;
@@ -660,9 +848,7 @@ If_DecSubNtk_t * Abc_DecRecordToHopCros( Abc_Ntk_t * pNtk, Hop_Man_t * pMan, If_
     memset(DecNtk, 0, sizeof(If_DecSubNtk_t));
     DecNtk->vLut = Vec_PtrAlloc(10);
     DecNtk->Id = pIfObj->Id;
-
     int i;
-    printf("Function call\n");
     // go through pIfMan
     If_ManCleanMarkV( pIfMan );
     Abc_NtkForEachCo( pNtk, pNode, i )
@@ -671,27 +857,78 @@ If_DecSubNtk_t * Abc_DecRecordToHopCros( Abc_Ntk_t * pNtk, Hop_Man_t * pMan, If_
         if (foundNode != NULL)
         {
             DecNtk->SharedId = foundNode->Id;
-            // printf("Ended search as node with sharedLeaves == 4 is found\n");
+            // printf("Ended search as node with sharedLeaves == 4 is found. Id is: %i\n", DecNtk->SharedId);
             break;
         }
     }
+    // if there is no other node with the same leafs return NULL
+    if ( foundNode == NULL )
+    {
+        freeDecNtk(DecNtk);
+        DecNtk = NULL;
+        return DecNtk;
+    }
+    // if one of the nodes is already part of a subnetwork return NULL
+    int entry;
+    Vec_IntForEachEntry(vUsedNodes, entry, i) {
+        if(entry == pIfObj->Id || entry == foundNode->Id)
+        {
+            freeDecNtk(DecNtk);
+            DecNtk = NULL;
+            return DecNtk;
+        }
+    }
+    /*if ( foundNode->Id < pIfObj->Id )
+    {
+        printf("Id to small\n");
+        DecNtk = NULL;
+        return DecNtk;
+    }*/
     pCutBest1 = If_ObjCutBest( foundNode );
     // Rotate pins of the other LUT as well, so they are aligned ( modify for the case of <4 shared leaves )
+    /*If_Obj_t * pLeafD;
+    float PinDelays[IF_MAX_LUTSIZE];
+    int truthId;
+    If_CutForEachLeaf( pIfMan, pCutBest1, pLeafD, i )
+    {
+        PinDelays[i] = If_ObjCutBest(pLeafD)->Delay;
+        printf("Delay: %f\n", If_ObjCutBest(pLeafD)->Delay);
+    }*/
     If_CutRotatePins( pIfMan, pCutBest1 );
 
-    /*int k;
+    // check the leaf order
+    int k;
     If_Obj_t * pLeaf;
+    Abc_Obj_t * NameNode;
+    int vLeaves0[4], vLeaves1[4];
+    If_CutForEachLeaf( pIfMan, pCutBest, pLeaf, k )
+    {
+        // printf( "LeafId: %i\n", pLeaf->Id );
+        vLeaves0[3-k] = pLeaf->Id;
+        NameNode = Abc_NtkObj( pNtk, pLeaf->Id );
+        // printf("Node %i has name %s\n", NameNode->Id, Abc_ObjName(NameNode));
+    }
     If_CutForEachLeaf( pIfMan, pCutBest1, pLeaf, k )
     {
-        printf( "LeafId: %i\n", pLeaf->Id );
+        vLeaves1[3-k] = pLeaf->Id;
+        assert( vLeaves1[3-k] == vLeaves0[3-k] );
     }
-    int l;
-    Abc_Obj_t * pCi;
-    Abc_NtkForEachCi( pNtk, pCi, l)
+
+    for(int o = 0; o < 3; o++) {
+        if(vLeaves0[i] < vLeaves0[o+1]) {  // If current element is greater than next
+            // printf("No ascending order\n");
+            DecNtk = NULL;
+            return DecNtk;
+        }
+    }
+
+    // maybe issue when Rotate pins really rotates something and the order gets mixed up
+    /*for( int r = 0; r < 4; ++r )
     {
-        printf("Node %i has name %s\n", pCi->Id, Abc_ObjName(pCi));
+        printf("Leaf Ids: %i\n", vLeaves0[r]);
     }*/
-    // printf( "The nodes %i and %i have shared Leaves\n", pIfObj->Id, foundNode->Id );
+
+    //printf( "The nodes %i and %i have shared Leaves\n", pIfObj->Id, foundNode->Id );
 
     // get the truth tables
     word * pTruth1 = If_CutTruthW(pIfMan, pCutBest1);
@@ -701,13 +938,15 @@ If_DecSubNtk_t * Abc_DecRecordToHopCros( Abc_Ntk_t * pNtk, Hop_Man_t * pMan, If_
     word pTruth0_copy = *pTruth0;
     // both truth tables need to be in their non-complemented form
     int is_complement = 0;
-    if(  If_CutTruthIsCompl( pCutBest ) )
+    if( If_CutTruthIsCompl( pCutBest ) )
     {
+        //pCutBest->iCutFunc = 0;
         pTruth0_copy = ~pTruth0_copy;
         is_complement = 1;
     }
     if(  If_CutTruthIsCompl( pCutBest1 ) )
     {
+        // pCutBest1->iCutFunc = 0;
         pTruth1_copy = ~ pTruth1_copy;
         if ( is_complement == 1 )
         {
@@ -718,23 +957,26 @@ If_DecSubNtk_t * Abc_DecRecordToHopCros( Abc_Ntk_t * pNtk, Hop_Man_t * pMan, If_
             is_complement = 2;
         }
     }
-    // word dcba
-    int sequences[4][4] = {{4, 1, 2, 3}, {3, 1, 2, 4}, {2, 1, 3, 4}, {1, 2, 3, 4}};
-    // iteration 0 has cba as three input LUT, 1 = dba, 2 = dca, 3 = dcb.
-    for(int iter_var=0; iter_var < 4; iter_var++)
+
+    // Iterate over decompositions; Start with the best and return if found.
+    int (*decompose[1])(If_DecSubNtk_t *, word, word, int *, int) = {&dec1};
+    int found = 0;  // Decomposition found indicator
+    for( int dec_func = 0; dec_func < 1 && !found; dec_func++ )  // Loop through each decomposition function
     {
-        // Apply the shift-to-front operation
-        Abc_TtShift( &pTruth0_copy, 1, 4, iter_var);
-        Abc_TtShift( &pTruth1_copy, 1, 4, iter_var);
-
         // perform LUT-decomposition and return the LUT-structure
-
-        int * Ci = sequences[iter_var];
-        if( dec1(DecNtk, pTruth0_copy, pTruth1_copy, Ci, is_complement) )
+        if( (*decompose[dec_func])(DecNtk, pTruth0_copy, pTruth1_copy, vLeaves0, is_complement) )
         {
-            // printf( "decomposition found: %i \n", iter_var );
+            // If decomposition is found, set the indicator to true and break the inner loop
+            printf("Decomposition with dec%i on root nodes: %i and %i\n", dec_func + 1, pIfObj->Id, foundNode->Id );
+            found = 1;
             break;
         }
+    }
+    if ( found == 0 )
+    {
+        freeSubnetwork(DecNtk);
+        // printf( "No decomposition found\n" );
+        DecNtk = NULL;
     }
     assert( !pIfMan->pPars->fUseTtPerm );
     return DecNtk;
