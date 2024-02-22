@@ -333,6 +333,7 @@ struct If_DecLut_t_
 
     // pointer to list of fanin LUTs
     If_DecLut_t *   pVirtFi;       // 'virtual' fan-in - meas other 'If_DecLut_t_'
+    int             indexVirt;      // the index at which the virtual fanin has to be created
     int *           vRealFis;       // 'real' fan-ins - means other 'pIfObjs'
     int             nRealFis;       // number of 'real' fan-ins
 };

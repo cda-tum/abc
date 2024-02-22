@@ -718,7 +718,7 @@ Abc_Obj_t * Abc_NodeFromIfDec_rec( Abc_Ntk_t * pNtk, Abc_Ntk_t * pNtkNew, If_Man
                     int * Fis = SLut->vRealFis;
                     for (int j = 0; j < SLut->nRealFis; j++) {
                         int Id = Fis[j];
-                        // printf( "The Fi Ids: %i\n", Id );
+                        // printf( "The shared Fi Ids: %i\n", Id );
                         Abc_ObjAddFanin(pVirNode, Abc_NtkObj( pNtkNew, Id ));
                     }
                     // this means the truth table also has to be shifted the right way !!!
@@ -736,6 +736,17 @@ Abc_Obj_t * Abc_NodeFromIfDec_rec( Abc_Ntk_t * pNtk, Abc_Ntk_t * pNtkNew, If_Man
                         // printf( "The Fi Ids: %i\n", Id );
                         Abc_ObjAddFanin(pNodeNew, Abc_NtkObj( pNtkNew, Id ));
                     }
+                    /*for (int j = 0, k = 0; k <= LLut->nRealFis; k++)
+                    {
+                        if ( k == 0 ) // LLut->indexVirt
+                            Abc_ObjAddFanin(pNodeNew, pVirNode);
+                        else {
+                            int Id = Fis[j];
+                            // printf( "The L Fi Ids: %i\n", Id );
+                            Abc_ObjAddFanin(pNodeNew, Abc_NtkObj( pNtkNew, Id ));
+                            j++;
+                        }
+                    }*/
                     pNodeNew->pData = Abc_DecSubNtkToHop( (Hop_Man_t *)pNtkNew->pManFunc, pIfMan, vCover, &LLut->truth_table, LLut->nVars );
 
                     // convert the LUT-structure into a set of logic nodes in Abc_Ntk_t
