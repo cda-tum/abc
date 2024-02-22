@@ -1233,7 +1233,7 @@ void create_and_init_dec_lut2_14(If_DecSubNtk_t* DecNtk, word cur4inpLut, int is
     pDecLut1->pVirtFi = pDecLut2;
     pDecLut1->vRealFis[0] = vLeaves[ind1];
     pDecLut1->vRealFis[1] = vLeaves[ind2];
-    pDecLut1->vRealFis[2] = vLeaves[ 2 - (found_dec - 1)];
+    pDecLut1->vRealFis[2] = vLeaves[ 3 - (found_dec - 1) ];
     pDecLut1->nRealFis = 3;
 }
 If_DecLut_t* create_and_init_dec_lut2_2(If_DecSubNtk_t* DecNtk, word cur3inpLut, const int * vLeaves, int ind1, int ind2 )
