@@ -18,6 +18,7 @@
 
 #include "ac_wrapper.h"
 #include "ac_decomposition.hpp"
+#include "ac_dc_decomposition.hpp"
 #include "acd66.hpp"
 #include "acdXX.hpp"
 
@@ -171,6 +172,57 @@ int acdXX_decompose( word * pTruth, unsigned lutSize, unsigned nVars, unsigned c
   }
 
   return 1;
+}
+
+int acd_dc_evaluate( word * pTruth, word * pCareSet, unsigned nVars, int lutSize, unsigned *pdelay, unsigned *cost, int try_no_late_arrival )
+{
+    using namespace acd;
+
+    ac_dc_decomposition_params ps;
+    ps.lut_size = lutSize;
+    ps.use_first = false;
+    ps.try_no_late_arrival = static_cast<bool>( try_no_late_arrival );
+    ac_dc_decomposition_stats st;
+
+    ac_dc_decomposition_impl acd( nVars, ps, &st );
+    int val = acd.run( pTruth, pCareSet, *pdelay );
+
+    if ( val < 0 )
+    {
+        *pdelay = 0;
+        return -1;
+    }
+
+    *pdelay = acd.get_profile();
+    *cost = st.num_luts;
+    // Debug output for equivalence checking of TTs
+    int eq = acd.check_truth_table_equivalence_test(pTruth, pCareSet);
+    //assert(eq && "DC tt is not equivalent");
+    return val;
+}
+
+int acd_dc_decompose( word * pTruth, word * pCareSet, unsigned nVars, int lutSize, unsigned *pdelay, unsigned char *decomposition )
+{
+    using namespace acd;
+
+    ac_dc_decomposition_params ps;
+    ps.lut_size = lutSize;
+    ps.use_first = true;
+    ac_dc_decomposition_stats st;
+
+    ac_dc_decomposition_impl acd( nVars, ps, &st );
+    acd.run( pTruth, pCareSet, *pdelay );
+    int val = acd.compute_decomposition();
+
+    if ( val < 0 )
+    {
+        *pdelay = 0;
+        return -1;
+    }
+
+    *pdelay = acd.get_profile();
+    acd.get_decomposition( decomposition );
+    return 0;
 }
 
 ABC_NAMESPACE_IMPL_END

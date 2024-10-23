@@ -116,6 +116,12 @@ extern void           Dec_GraphPrint( FILE * pFile, Dec_Graph_t * pGraph, char *
 /*=== decUtil.c ========================================================*/
 extern unsigned       Dec_GraphDeriveTruth( Dec_Graph_t * pGraph );
 
+extern int             acd_evaluate( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned *cost, int try_no_late_arrival );
+extern int             acd_decompose( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned char *decomposition );
+extern int             acd2_evaluate( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned *cost, int try_no_late_arrival );
+extern int             acd2_decompose( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned char *decomposition );
+extern int             acd_dc_evaluate( word * pTruth, word * pCareSet, unsigned nVars, int lutSize, unsigned *pdelay, unsigned *cost, int try_no_late_arrival );
+
 ////////////////////////////////////////////////////////////////////////
 ///                     FUNCTION DEFINITIONS                         ///
 ////////////////////////////////////////////////////////////////////////

@@ -675,6 +675,63 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
             nNodes += Dsc_CountAnds( pDsd );
         }
         Dsc_free_pool(mem_pool);
+    } else if ( DecType == 7)
+    {
+        unsigned cost1 = 1;
+        unsigned cost2 = 1;
+        int use_late_arrival = 0;
+        unsigned delay1 = 0;
+        unsigned delay2 = 0;
+        int count11 = 0;
+        int count12 = 0;
+        int count13 = 0;
+        int count21 = 0;
+        int count22 = 0;
+        int count23 = 0;
+        for ( i = 0; i < p->nFuncs - 1; i+=2 )
+        {
+            int val1 = acd_evaluate( p->pFuncs[i], p->nVars, 5, &delay1, &cost1, !use_late_arrival );
+            if (val1 == 1)
+            {
+                /*unsigned char decompArray[92];
+                unsigned delaydec = 0;
+                int val;
+                val = acd_decompose( p->pFuncs[i], p->nVars, 6, &delaydec, decompArray );
+                assert( val == 0 );*/
+                ++count11;
+            }
+            else if (val1 == 2)
+            {
+                ++count12;
+            }
+            else
+            {
+                ++count13;
+            }
+            int val2 = acd_dc_evaluate( p->pFuncs[i], p->pFuncs[i+1], p->nVars, 5, &delay2, &cost2, !use_late_arrival );
+            if (val2 == 1)
+            {
+                ++count21;
+            }
+            else if (val2 == 2)
+            {
+                ++count22;
+            }
+            else
+            {
+                ++count23;
+            }
+            nNodes += cost1;
+            // break;
+        }
+        printf("===========ACD===========\n");
+        printf("1lvl: %i\n", count11);
+        printf("2lvl: %i\n", count12);
+        printf("Not Decomposable: %i\n", count13);
+        printf("======ACD with DCs=======\n");
+        printf("1lvl: %i\n", count21);
+        printf("2lvl: %i\n", count22);
+        printf("Not Decomposable: %i\n", count23);
     }
     else assert( 0 );
 
@@ -727,7 +784,7 @@ int Abc_DecTest( char * pFileName, int DecType, int nVarNum, int fVerbose )
         printf( "Using truth tables from file \"%s\"...\n", pFileName );
     if ( DecType == 0 )
         { if ( nVarNum < 0 ) Abc_TtStoreTest( pFileName ); }
-    else if ( DecType >= 1 && DecType <= 6 )
+    else if ( DecType >= 1 && DecType <= 7 )
         Abc_TruthDecTest( pFileName, DecType, nVarNum, fVerbose );
     else
         printf( "Unknown decomposition type value (%d).\n", DecType );
