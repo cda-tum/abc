@@ -677,27 +677,24 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
         Dsc_free_pool(mem_pool);
     } else if ( DecType == 7)
     {
+        int nNodes1 = 0;
         unsigned cost1 = 1;
         unsigned cost2 = 1;
         int use_late_arrival = 0;
-        unsigned delay1 = 0;
-        unsigned delay2 = 0;
         int count11 = 0;
         int count12 = 0;
         int count13 = 0;
         int count21 = 0;
         int count22 = 0;
         int count23 = 0;
+        abctime clk1 = Abc_Clock();
         for ( i = 0; i < p->nFuncs - 1; i+=2 )
         {
-            int val1 = acd_evaluate( p->pFuncs[i], p->nVars, 5, &delay1, &cost1, !use_late_arrival );
+            unsigned delay1 = 0;
+            int val1 = acd_evaluate( p->pFuncs[i], p->nVars, 7, &delay1, &cost1, !use_late_arrival );
+
             if (val1 == 1)
             {
-                /*unsigned char decompArray[92];
-                unsigned delaydec = 0;
-                int val;
-                val = acd_decompose( p->pFuncs[i], p->nVars, 6, &delaydec, decompArray );
-                assert( val == 0 );*/
                 ++count11;
             }
             else if (val1 == 2)
@@ -708,7 +705,15 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
             {
                 ++count13;
             }
-            int val2 = acd_dc_evaluate( p->pFuncs[i], p->pFuncs[i+1], p->nVars, 5, &delay2, &cost2, !use_late_arrival );
+            nNodes += cost1;
+        }
+        Abc_PrintTime( 1, "Time_wo", Abc_Clock() - clk1 );
+        abctime clk2 = Abc_Clock();
+        for ( i = 0; i < p->nFuncs - 1; i+=2 )
+        {
+            unsigned delay2 = 0;
+            int val2 = acd_dc_evaluate( p->pFuncs[i], p->pFuncs[i+1], p->nVars, 7, &delay2, &cost2, !use_late_arrival );
+
             if (val2 == 1)
             {
                 ++count21;
@@ -721,16 +726,20 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
             {
                 ++count23;
             }
-            nNodes += cost1;
+            nNodes1 += cost2;
             // break;
         }
+        Abc_PrintTime( 1, "Time_w_dc", Abc_Clock() - clk2 );
         printf("===========ACD===========\n");
         printf("1lvl: %i\n", count11);
         printf("2lvl: %i\n", count12);
+        printf( "Num LUTs =%9d\n", nNodes );
         printf("Not Decomposable: %i\n", count13);
         printf("======ACD with DCs=======\n");
         printf("1lvl: %i\n", count21);
         printf("2lvl: %i\n", count22);
+        printf( "Num LUTs =%9d\n", nNodes1 );
+        printf("DC better by = %9.2f percent\n", 100.0 * (nNodes - nNodes1) / nNodes);
         printf("Not Decomposable: %i\n", count23);
     }
     else assert( 0 );

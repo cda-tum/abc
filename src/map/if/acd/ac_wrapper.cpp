@@ -196,7 +196,7 @@ int acd_dc_evaluate( word * pTruth, word * pCareSet, unsigned nVars, int lutSize
     *pdelay = acd.get_profile();
     *cost = st.num_luts;
     // Debug output for equivalence checking of TTs
-    int eq = acd.check_truth_table_equivalence_test(pTruth, pCareSet);
+    // int eq = acd.check_truth_table_equivalence_test(pTruth, pCareSet);
     //assert(eq && "DC tt is not equivalent");
     return val;
 }
