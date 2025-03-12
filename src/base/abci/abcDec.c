@@ -687,11 +687,14 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
         int count21 = 0;
         int count22 = 0;
         int count23 = 0;
+        unsigned delay = 0x1;
+        int LutSize = 6;
         abctime clk1 = Abc_Clock();
+        // Abc_PrintInt(p->nFuncs);
         for ( i = 0; i < p->nFuncs - 1; i+=2 )
         {
-            unsigned delay1 = 0;
-            int val1 = acd_evaluate( p->pFuncs[i], p->nVars, 7, &delay1, &cost1, !use_late_arrival );
+            unsigned delay1 = delay;
+            int val1 = acd_evaluate( p->pFuncs[i], p->nVars, LutSize, &delay1, &cost1, !use_late_arrival );
 
             if (val1 == 1)
             {
@@ -711,8 +714,8 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
         abctime clk2 = Abc_Clock();
         for ( i = 0; i < p->nFuncs - 1; i+=2 )
         {
-            unsigned delay2 = 0;
-            int val2 = acd_dc_evaluate( p->pFuncs[i], p->pFuncs[i+1], p->nVars, 7, &delay2, &cost2, !use_late_arrival );
+            unsigned delay2 = delay;
+            int val2 = acd_dc_evaluate( p->pFuncs[i], p->pFuncs[i+1], p->nVars, LutSize, &delay2, &cost2, !use_late_arrival );
 
             if (val2 == 1)
             {
@@ -729,18 +732,30 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
             nNodes1 += cost2;
             // break;
         }
+        // Compute decomposable function counts
+        int decomposable_acd = count11 + count12;
+        int decomposable_acd_dc = count21 + count22;
+
+        // Avoid division by zero
+        double lut_per_func_acd = decomposable_acd ? (double)nNodes / decomposable_acd : 0.0;
+        double lut_per_func_acd_dc = decomposable_acd_dc ? (double)nNodes1 / decomposable_acd_dc : 0.0;
+
+        // Compute improvement
+        double improvement = lut_per_func_acd ?
+                             100.0 * (lut_per_func_acd - lut_per_func_acd_dc) / lut_per_func_acd : 0.0;
         Abc_PrintTime( 1, "Time_w_dc", Abc_Clock() - clk2 );
         printf("===========ACD===========\n");
         printf("1lvl: %i\n", count11);
         printf("2lvl: %i\n", count12);
-        printf( "Num LUTs =%9d\n", nNodes );
+        printf( "LUTs per decomposable function =%9.2f\n", lut_per_func_acd );
         printf("Not Decomposable: %i\n", count13);
         printf("======ACD with DCs=======\n");
         printf("1lvl: %i\n", count21);
         printf("2lvl: %i\n", count22);
-        printf( "Num LUTs =%9d\n", nNodes1 );
-        printf("DC better by = %9.2f percent\n", 100.0 * (nNodes - nNodes1) / nNodes);
+        printf( "LUTs per decomposable function =%9.2f\n", lut_per_func_acd_dc );
         printf("Not Decomposable: %i\n", count23);
+        printf("1lvl Decomposition improvement = %9.2f percent\n", 100.0 * (count21 - count11) / count11);
+        printf("Relative LUT Improvement = %9.2f percent\n", improvement);
     }
     else assert( 0 );
 
