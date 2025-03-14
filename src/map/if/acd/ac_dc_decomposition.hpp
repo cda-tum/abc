@@ -301,7 +301,7 @@ namespace acd
             std::function<uint32_t( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost )> column_multiplicity_fn_dc[5] = {
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc1<1u>( tt, cs, loc_tt, loc_cost ); },
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc2<2u>( tt, cs, loc_tt, loc_cost); },
-                    [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc_prox<3u>( tt, cs, loc_tt, loc_cost); },
+                    [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc3_sym<3u>( tt, cs, loc_tt, loc_cost); },
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc_prox5<4u>( tt, cs, loc_tt, loc_cost ); },
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc_prox5<5u>( tt, cs, loc_tt, loc_cost ); } };
 
@@ -710,6 +710,164 @@ namespace acd
             return multiplicity;
         }
 
+        template<uint32_t free_set_size>
+        uint32_t column_multiplicity_dc3_sym( STT const &tt, STT const &cs, STT &loc_tt, uint32_t loc_cost )
+        {
+            /*STT tt;
+            tt._bits[0] = {0b0000000000000000000000000000000000000000001100000000000000000001};
+            STT cs;
+            cs._bits[0] = {0b1111111111111111111111111111111111111111110011111111111111111110};*/
+
+            uint32_t bail_multiplicity = 2;
+            uint64_t multiplicity_set_wo_dc[4] = {0u, 0u, 0u, 0u};
+            uint64_t multiplicity_set_dc[4] = {0u, 0u, 0u, 0u};
+            uint64_t multiplicity_set_combined[4] = {0u, 0u, 0u, 0u};
+
+            uint32_t const num_blocks = ( num_vars > 6 ) ? ( 1u << ( num_vars - 6 ) ) : 1;
+            uint64_t constexpr masks_bits[] = {0x0, 0x3, 0xF, 0x3F};
+            uint64_t constexpr masks_bits_dc[] = {0x0, 0x3, 0xF, 0xFF};
+            uint64_t constexpr masks_idx[] = {0x0, 0x0, 0x0, 0x3};
+
+            std::unordered_map<uint64_t, uint64_t> counts; // Stores (cof, count)
+
+            if ( loc_cost == UINT32_MAX )
+            {
+                loc_cost = 10;
+            }
+            std::array<uint64_t, 64> functions;
+            uint32_t size{0};
+
+            /* supports up to 64 values of free set (256 for |FS| == 3)*/
+            static_assert( free_set_size <= 3, "Wrong free set size for method used, expected le 3" );
+
+            /* extract iset functions */
+            for ( auto i = 0u; i < num_blocks; ++i )
+            {
+                uint64_t cof = tt._bits[i];
+                uint64_t ccs = cs._bits[i];
+                /* the free set functions have size 2^free_set_size */
+                for ( auto j = 0; j < ( 64 >> free_set_size ); ++j )
+                {
+                    uint64_t cof_masked = cof & masks_bits[free_set_size];  // Mask the truth table
+                    uint64_t ccs_masked = ccs & masks_bits_dc[free_set_size];  // Mask the care set
+
+                    if ( ccs_masked == masks_bits_dc[free_set_size] )  // All bits are in the care set
+                    {
+                        multiplicity_set_wo_dc[( cof >> 6 ) & masks_idx[free_set_size]] |=
+                                UINT64_C( 1 ) << ( cof_masked );
+                    } else if ( ccs_masked )  // If at least one bit is in the care set
+                    {
+                        multiplicity_set_dc[( cof >> 6 ) & masks_idx[free_set_size]] |= UINT64_C( 1 ) << ( cof_masked );
+                    }
+                    multiplicity_set_combined[( cof >> 6 ) & masks_idx[free_set_size]] |=
+                            UINT64_C( 1 ) << ( cof_masked );
+                    counts[cof_masked]++;
+
+                    cof >>= ( 1u << free_set_size );
+                    ccs >>= ( 1u << free_set_size );
+                }
+            }
+
+            for ( auto i = 0u; i < num_blocks; ++i )
+            {
+                while ( multiplicity_set_wo_dc[i] )
+                {
+                    uint64_t pos = __builtin_ctzll(
+                            multiplicity_set_wo_dc[i] );  // Get the position of the lowest set bit
+                    multiplicity_set_wo_dc[i] &= multiplicity_set_wo_dc[i] - 1;  // Clear the lowest set bit
+
+                    // i gives the first two bits of cof and pos gives the remaining 6 bits of cof
+                    functions[size++] = ( i << 6 ) | pos;
+                }
+            }
+
+            if ( size >= loc_cost )
+            {
+                return size;
+            }
+            if ( counts.size() <= bail_multiplicity )
+            {
+                loc_tt = tt;
+                return counts.size();
+            }
+
+            std::vector<std::pair<uint64_t, uint64_t>> vec( counts.begin(), counts.end() );
+            std::sort( vec.begin(), vec.end(), []( const auto &a, const auto &b )
+            {
+                return a.second > b.second; // Sort by count descending
+            } );
+
+            const uint32_t min_multiplicity = std::max( size, bail_multiplicity );
+            for ( uint32_t i = 0; i < min_multiplicity - size; ++i )
+            {
+                functions[size++] = vec[i].first;
+            }
+
+            for ( uint32_t multiplicity = min_multiplicity; multiplicity < loc_cost; ++multiplicity )
+            {
+                STT new_tt = tt;
+                bool all_can_merge = true;  // Assume all cof_masked values can merge
+
+                for ( auto i = 0u; i < num_blocks; ++i )
+                {
+                    uint64_t cof = tt._bits[i];
+                    uint64_t ccs = cs._bits[i];
+
+                    uint64_t& new_cof = new_tt._bits[i];
+
+                    /* The free set functions have size 2^free_set_size */
+                    for ( auto j = 0; j < ( 64 >> free_set_size ); ++j )
+                    {
+                        uint64_t cof_masked = cof & masks_bits_dc[free_set_size];  // Mask the truth table
+                        uint64_t ccs_masked = ccs & masks_bits_dc[free_set_size];  // Mask the care set
+
+                        if ( ccs_masked && ccs_masked != masks_bits_dc[free_set_size] )
+                        {
+                            bool can_merge_this = false;  // Check if this specific `cof_masked` can merge
+
+                            for ( uint32_t k = 0; k < size; ++k )
+                            {
+                                if ( ( ( cof_masked ^ functions[k] ) & ccs_masked ) == 0 )
+                                {
+                                    new_cof &= ~( masks_bits_dc[free_set_size]
+                                            << ( j * ( 1u << free_set_size ) ) );  // Clear bits at the position
+                                    new_cof |= ( functions[k] << ( j * ( 1u << free_set_size ) ) ); // Insert new value
+
+                                    can_merge_this = true;  // This `cof_masked` found a valid merge
+                                    break;  // No need to check further
+                                }
+                            }
+
+                            if ( !can_merge_this )  // If this `cof_masked` cannot merge, reject `m`
+                            {
+                                all_can_merge = false;
+                                break;  // Exit inner loop early
+                            }
+                        }
+
+                        cof >>= ( 1u << free_set_size );
+                        ccs >>= ( 1u << free_set_size );
+                    }
+
+                    if ( !all_can_merge ) break;  // Exit outer loop early if any `cof_masked` fails
+                }
+
+                if ( !all_can_merge )
+                {
+                    // Add another function to the list and test the next highest multiplicity
+                    if ( multiplicity < vec.size() )
+                    {
+                        functions[size++] = vec[multiplicity].first;
+                    }
+                    continue;  // Skip to the next `m`
+                }
+                loc_tt = new_tt;
+                return multiplicity;  // Return the valid `m`
+            }
+
+            return loc_cost;
+        }
+
         static void encode_dc (uint64_t* mapping, uint64_t mask, uint64_t cof_masked)
         {
             while (mask) {
@@ -750,7 +908,7 @@ namespace acd
         }
 
         template<uint32_t free_set_size>
-        uint32_t column_multiplicity_dc1(STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost, bool manipulate = false)
+        uint32_t column_multiplicity_dc1(STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost, bool manipulate = true)
         {
             uint64_t multiplicity_set = 0u;
             uint32_t multiplicity = 0;
@@ -803,7 +961,7 @@ namespace acd
             multiplicity_set &= 0xF;
             multiplicity = __builtin_popcountl(multiplicity_set);
 
-            /*if (multiplicity < loc_cost)
+            if (multiplicity < loc_cost)
             {
                 if (manipulate)
                 {
@@ -819,7 +977,7 @@ namespace acd
                         uint64_t cof = tt._bits[i];  // Extract truth table
                         uint64_t ccs = cs._bits[i];  // Extract care set
 
-                        uint64_t new_cof = new_tt._bits[i];  // Extract truth table
+                        uint64_t& new_cof = new_tt._bits[i];  // Extract truth table
 
                         // Iterate over 2-bit pairs in the 64-bit block
                         for (uint32_t j = 0; j < (64 >> free_set_size); ++j)
@@ -849,7 +1007,7 @@ namespace acd
                 {
                     loc_tt = tt;
                 }
-            }*/
+            }
 
             return multiplicity;
         }
@@ -964,7 +1122,7 @@ namespace acd
         }
 
         template<uint32_t free_set_size>
-        uint32_t column_multiplicity_dc2(STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost, bool manipulate = false)
+        uint32_t column_multiplicity_dc2(STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost, bool manipulate = true)
         {
             /*STT tt;
             tt._bits[0] = 17365590987237162750u; //{0b0000000000000000000000000000000000000000000000000000000000001111};
@@ -1042,7 +1200,7 @@ namespace acd
             assert(multiplicity <= 16 && "Bug");
             assert(multiplicity > 0 && "Bug2");
 
-            /*if (multiplicity < loc_cost)
+            if (multiplicity < loc_cost)
             {
                 if (manipulate)
                 {
@@ -1093,13 +1251,13 @@ namespace acd
                             ccs >>= (1u << free_set_size);
                         }
                     }
-                    loc_tt = tt;
+                    loc_tt = new_tt;
                 }
                 else
                 {
                     loc_tt = tt;
                 }
-            }*/
+            }
 
             return multiplicity;
         }
@@ -1280,7 +1438,7 @@ namespace acd
         // This toggles DCs so that the value at position x collapses to 1 if the majority of bits at position x is 1,
         // and to 0 if the majority of bits at position x is 0.
         template<uint32_t free_set_size>
-        uint32_t column_multiplicity_dc_prox(STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost, bool manipulate = false )
+        uint32_t column_multiplicity_dc_prox(STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost, bool manipulate = true )
         {
             uint32_t const num_blocks = (num_vars > 6) ? (1u << (num_vars - 6)) : 1;
             // num_blocks = 1;
@@ -1345,9 +1503,9 @@ namespace acd
                 multiplicity = multiplicity2;
             }
 
-            /*if ( multiplicity < loc_cost )
+            if ( multiplicity < loc_cost )
             {
-                if (manipulate)
+                if (manipulate && multiplicity2 != multiplicity)
                 {
                     loc_tt = tt_cpy;
                 }
@@ -1355,13 +1513,13 @@ namespace acd
                 {
                     loc_tt = tt;
                 }
-            }*/
+            }
 
             return multiplicity;
         }
 
         template<uint32_t free_set_size>
-        uint32_t column_multiplicity_dc_prox5(STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost, bool manipulate = false )
+        uint32_t column_multiplicity_dc_prox5(STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost, bool manipulate = true )
         {
             uint32_t const num_blocks = (num_vars > 6) ? (1u << (num_vars - 6)) : 1;
             // num_blocks = 1;
@@ -1426,9 +1584,9 @@ namespace acd
                 multiplicity = multiplicity2;
             }
 
-            /*if ( multiplicity < loc_cost )
+            if ( multiplicity < loc_cost )
             {
-                if (manipulate)
+                if (manipulate && multiplicity2 != multiplicity)
                 {
                     loc_tt = tt_cpy;
                 }
@@ -1436,7 +1594,7 @@ namespace acd
                 {
                     loc_tt = tt;
                 }
-            }*/
+            }
 
             return multiplicity;
         }
@@ -1687,7 +1845,6 @@ namespace acd
             return size;
         }
 
-        // ToDo: Test
         uint32_t column_multiplicity2_dc( STT const& tt, STT const& cs, uint32_t free_set_size )
         {
             /*STT tt;
@@ -1918,7 +2075,7 @@ namespace acd
                 uint32_t cost = fn( tt, cs, local_best_tt, best_cost );
                 if ( cost < best_cost )
                 {
-                    local_best_tt = tt;
+                    // local_best_tt = tt;
                     local_best_cs = cs;
                     best_cost = cost;
                     for ( uint32_t i = 0; i < num_vars; ++i )
