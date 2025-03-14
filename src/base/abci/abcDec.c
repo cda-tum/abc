@@ -682,7 +682,7 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
         unsigned cost2 = 1;
         int use_late_arrival = 0;
         int count11 = 0, count12 = 0, count13 = 0, count21 = 0, count22 = 0, count23 = 0;
-        unsigned delay = 0x1;
+        unsigned delay = 0x1E;
         int LutSize = 6;
         abctime clk1 = Abc_Clock();
         // Abc_PrintInt(p->nFuncs);

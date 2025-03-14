@@ -711,7 +711,7 @@ namespace acd
         }
 
         template<uint32_t free_set_size>
-        uint32_t column_multiplicity_dc3_sym( STT const &tt, STT const &cs, STT &loc_tt, uint32_t loc_cost )
+        uint32_t column_multiplicity_dc3_sym_old( STT const &tt, STT const &cs, STT &loc_tt, uint32_t loc_cost )
         {
             /*STT tt;
             tt._bits[0] = {0b0000000000000000000000000000000000000000001100000000000000000001};
@@ -866,6 +866,107 @@ namespace acd
             }
 
             return loc_cost;
+        }
+
+        template<uint32_t free_set_size>
+        uint32_t column_multiplicity_dc3_sym( STT const &tt, STT const &cs, STT &loc_tt, uint32_t loc_cost,
+                                              bool manipulate = false )
+        {
+            /*STT tt;
+            tt._bits[0] = 18383975132427386873u;//{0b1000000000000000000000000000000000000000000000000000000000000000};
+            STT cs;
+            cs._bits[0] = 103349798061132u;//{0b0111111111111111111111111111111111111111111111111111111111111111};*/
+
+            uint32_t multiplicity = 0;
+            uint64_t multiplicity_set[4] = {0u, 0u, 0u, 0u};
+
+            uint32_t const num_blocks = ( num_vars > 6 ) ? ( 1u << ( num_vars - 6 ) ) : 1;
+            uint64_t constexpr masks_bits[] = {0x0, 0x3, 0xF, 0x3F};
+            uint64_t constexpr masks_bits_dc[] = {0x0, 0x3, 0xF, 0xFF};
+            uint64_t constexpr masks_idx[] = {0x0, 0x0, 0x0, 0x3};
+
+            std::array<uint64_t, 64> functions;
+            uint32_t size{0};
+
+            /* supports up to 64 values of free set (256 for |FS| == 3)*/
+            static_assert( free_set_size <= 3, "Wrong free set size for method used, expected le 3" );
+
+            STT new_tt = tt;
+            /* extract iset functions */
+            for ( auto i = 0u; i < num_blocks; ++i )
+            {
+                uint64_t cof = tt._bits[i];
+                uint64_t ccs = cs._bits[i];
+
+                uint64_t &new_cof = new_tt._bits[i];
+                /* the free set functions have size 2^free_set_size */
+                for ( auto j = 0; j < ( 64 >> free_set_size ); ++j )
+                {
+                    uint64_t cof_masked = cof & masks_bits[free_set_size];  // Mask the truth table
+                    uint64_t cof_masked8 = cof & masks_bits_dc[free_set_size];
+                    uint64_t ccs_masked = ccs & masks_bits_dc[free_set_size];  // Mask the care set
+
+                    if ( ccs_masked == masks_bits_dc[free_set_size] )  // All bits are in the care set
+                    {
+                        uint64_t &target = multiplicity_set[( cof >> 6 ) & masks_idx[free_set_size]];
+                        uint64_t before = target;  // Store original value
+
+                        target |= UINT64_C( 1 ) << ( cof_masked );  // Perform the operation
+                        if ( before != target )
+                        {
+                            functions[size++] = cof_masked8;
+                        }
+                    } else if ( ccs_masked )  // If at least one bit is in the care set
+                    {
+                        bool merge = false;
+                        for ( uint32_t k = 0; k < size; ++k )
+                        {
+                            if ( ( ( cof_masked8 ^ functions[k] ) & ccs_masked ) == 0 )
+                            {
+                                if ( manipulate )
+                                {
+                                    new_cof &= ~( masks_bits_dc[free_set_size]
+                                            << ( j * ( 1u << free_set_size ) ) );  // Clear bits at the position
+                                    new_cof |= ( functions[k] << ( j * ( 1u << free_set_size ) ) ); // Insert new value
+                                }
+                                merge = true;
+                                break;
+                            }
+                        }
+                        if ( !merge )
+                        {
+                            functions[size++] = cof_masked8;
+                            multiplicity_set[( cof >> 6 ) & masks_idx[free_set_size]] |=
+                                    UINT64_C( 1 ) << ( cof_masked );
+                        }
+                    }
+
+                    cof >>= ( 1u << free_set_size );
+                    ccs >>= ( 1u << free_set_size );
+                }
+            }
+
+            multiplicity = __builtin_popcountl( multiplicity_set[0] );
+
+            if ( free_set_size == 3 )
+            {
+                multiplicity += __builtin_popcountl( multiplicity_set[1] );
+                multiplicity += __builtin_popcountl( multiplicity_set[2] );
+                multiplicity += __builtin_popcountl( multiplicity_set[3] );
+            }
+
+            if ( multiplicity < loc_cost )
+            {
+                if ( manipulate )
+                {
+                    loc_tt = new_tt;
+                } else
+                {
+                    loc_tt = tt;
+                }
+            }
+
+            return multiplicity;
         }
 
         static void encode_dc (uint64_t* mapping, uint64_t mask, uint64_t cof_masked)
