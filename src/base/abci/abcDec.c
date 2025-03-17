@@ -682,75 +682,102 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
         unsigned cost2 = 1;
         int use_late_arrival = 0;
         int count11 = 0, count12 = 0, count13 = 0, count21 = 0, count22 = 0, count23 = 0;
-        unsigned delay = 0x1E;
         int LutSize = 6;
-        abctime clk1 = Abc_Clock();
-        // Abc_PrintInt(p->nFuncs);
-        for ( i = 0; i < p->nFuncs - 1; i+=2 )
-        {
-            unsigned delay1 = delay;
-            int val1 = acd_evaluate( p->pFuncs[i], p->nVars, LutSize, &delay1, &cost1, !use_late_arrival );
 
-            if (val1 == 1)
-            {
-                ++count11;
-            }
-            else if (val1 == 2)
-            {
-                ++count12;
-            }
-            else
-            {
-                ++count13;
-            }
-            nNodes += cost1;
-        }
-        Abc_PrintTime( 1, "Time_wo", Abc_Clock() - clk1 );
-        abctime clk2 = Abc_Clock();
-        for ( i = 0; i < p->nFuncs - 1; i+=2 )
-        {
-            unsigned delay2 = delay;
-            int val2 = acd_dc_evaluate( p->pFuncs[i], p->pFuncs[i+1], p->nVars, LutSize, &delay2, &cost2, !use_late_arrival );
+        int n = p->nVars;  // Number of bits in total
+        int f = 4;  // Number of late arriving variables
+        unsigned delay = ( 1 << f ) - 1; // Initial bit pattern with f bits set
 
-            if (val2 == 1)
+        abctime total_time_evaluate = 0;
+        abctime total_time_dc_evaluate = 0;
+
+        while ( 1 )
+        {
+            // use delay
+            for ( int j = n - 1; j >= 0; --j )
             {
-                ++count21;
+                printf( "%d", ( delay >> j ) & 1 );
             }
-            else if (val2 == 2)
+            printf( "\n" );
+            for ( i = 0; i < p->nFuncs - 1; i += 2 )
             {
-                ++count22;
+                unsigned delay1 = delay;
+                abctime start_evaluate = Abc_Clock();
+                int val1 = acd_evaluate( p->pFuncs[i], p->nVars, LutSize, &delay1, &cost1, !use_late_arrival );
+                abctime end_evaluate = Abc_Clock();
+                total_time_evaluate += ( end_evaluate - start_evaluate );
+
+                if ( val1 == 1 )
+                {
+                    ++count11;
+                } else if ( val1 == 2 )
+                {
+                    ++count12;
+                } else
+                {
+                    ++count13;
+                }
+                nNodes += cost1;
             }
-            else
+            for ( i = 0; i < p->nFuncs - 1; i += 2 )
             {
-                ++count23;
+                unsigned delay2 = delay;
+                abctime start_evaluate = Abc_Clock();
+                int val2 = acd_dc_evaluate( p->pFuncs[i], p->pFuncs[i + 1], p->nVars, LutSize, &delay2, &cost2,
+                                            !use_late_arrival );
+                abctime end_evaluate = Abc_Clock();
+                total_time_dc_evaluate += ( end_evaluate - start_evaluate );
+
+                if ( val2 == 1 )
+                {
+                    ++count21;
+                } else if ( val2 == 2 )
+                {
+                    ++count22;
+                } else
+                {
+                    ++count23;
+                }
+                nNodes1 += cost2;
+                // break;
             }
-            nNodes1 += cost2;
-            // break;
+
+            // Generate the next combination inline
+            unsigned x = delay;
+            if ( x == ( ( 1 << f ) - 1 ) << ( n - f ) ) break; // Termination condition
+
+            // Gosper's Hack for next combination of f bits
+            unsigned smallest = x & -x;
+            unsigned ripple = x + smallest;
+            unsigned new_bits = ( ( ripple ^ x ) >> 2 ) / smallest;
+            delay = ripple | new_bits;
+            break;
         }
         // Compute decomposable function counts
         int decomposable_acd = count11 + count12;
         int decomposable_acd_dc = count21 + count22;
 
         // Avoid division by zero
-        double lut_per_func_acd = decomposable_acd ? (double)nNodes / decomposable_acd : 0.0;
-        double lut_per_func_acd_dc = decomposable_acd_dc ? (double)nNodes1 / decomposable_acd_dc : 0.0;
+        double lut_per_func_acd = decomposable_acd ? ( double ) nNodes / decomposable_acd : 0.0;
+        double lut_per_func_acd_dc = decomposable_acd_dc ? ( double ) nNodes1 / decomposable_acd_dc : 0.0;
 
         // Compute improvement
         double improvement = lut_per_func_acd ?
-                             100.0 * (lut_per_func_acd - lut_per_func_acd_dc) / lut_per_func_acd : 0.0;
-        Abc_PrintTime( 1, "Time_w_dc", Abc_Clock() - clk2 );
-        printf("===========ACD===========\n");
-        printf("1lvl: %i\n", count11);
-        printf("2lvl: %i\n", count12);
+                             100.0 * ( lut_per_func_acd - lut_per_func_acd_dc ) / lut_per_func_acd : 0.0;
+        printf( "===========ACD===========\n" );
+        Abc_PrintTime( 1, "Time_wo_dc", total_time_evaluate );
+        printf( "1lvl: %i\n", count11 );
+        printf( "2lvl: %i\n", count12 );
         printf( "LUTs per decomposable function =%9.2f\n", lut_per_func_acd );
-        printf("Not Decomposable: %i\n", count13);
-        printf("======ACD with DCs=======\n");
-        printf("1lvl: %i\n", count21);
-        printf("2lvl: %i\n", count22);
+        printf( "Not Decomposable: %i\n", count13 );
+        printf( "======ACD with DCs=======\n" );
+        Abc_PrintTime( 1, "Time_w_dc", total_time_dc_evaluate );
+        printf( "1lvl: %i\n", count21 );
+        printf( "2lvl: %i\n", count22 );
         printf( "LUTs per decomposable function =%9.2f\n", lut_per_func_acd_dc );
-        printf("Not Decomposable: %i\n", count23);
-        printf("1lvl Decomposition improvement = %9.2f percent\n", 100.0 * (count21 - count11) / count11);
-        printf("Relative LUT Improvement = %9.2f percent\n", improvement);
+        printf( "Not Decomposable: %i\n", count23 );
+        printf( "1lvl Decomposition improvement = %9.2f percent\n", 100.0 * ( count21 - count11 ) / count11 );
+        printf( "Relative LUT Improvement = %9.2f percent\n", improvement );
     }
     else assert( 0 );
 
