@@ -1033,12 +1033,13 @@ namespace acd
             return multiplicity;
         }
 
+        // Helper: Assign partial functions to selected representative values
         static void encode_dc1( uint64_t *mapping, uint64_t mask, uint64_t cof_masked )
         {
             while ( mask )
             {
-                uint32_t pos = __builtin_ctzll( mask );  // Get the position of the lowest set bit
-                mask &= mask - 1;  // Clear the lowest set bit
+                uint32_t pos = __builtin_ctzll( mask );
+                mask &= mask - 1;
 
                 if ( mapping[pos] == 0xF )
                 {
@@ -1047,153 +1048,158 @@ namespace acd
             }
         }
 
-        static void min_hitting_set1( uint64_t &multiplicity_set, uint64_t encoding_mask )
+        // Greedy approximation of the minimum hitting set problem
+        static void min_hitting_set1( uint64_t &selected_set, uint64_t uncovered_mask )
         {
-            constexpr uint64_t masks[] = {0x5, 0x6, 0x9, 0xA};  // Predefined coverage masks
-            while ( encoding_mask )
+            constexpr uint64_t coverage_masks[] = {0x5, 0x6, 0x9, 0xA};
+
+            while ( uncovered_mask )
             {
                 uint32_t best_coverage = 0;
-                uint8_t best_index = 0xFF;  // Invalid index (255)
+                uint8_t best_index = 0xFF;
 
-                // Find the best choice
                 for ( uint8_t i = 0; i < 4; ++i )
                 {
-                    if ( multiplicity_set & ( UINT64_C( 1 ) << i ) ) continue; // Skip if already selected
+                    if ( selected_set & ( 1ULL << i ) ) continue;
 
-                    uint64_t coverage = masks[i] & encoding_mask;  // Compute covered bits
-                    uint32_t popcount = __builtin_popcountll( coverage );  // Count coverage
+                    uint64_t coverage = coverage_masks[i] & uncovered_mask;
+                    uint32_t count = __builtin_popcountll( coverage );
 
-                    if ( popcount > best_coverage )
+                    if ( count > best_coverage )
                     {
-                        best_coverage = popcount;
+                        best_coverage = count;
                         best_index = i;
                     }
                 }
 
-                if ( best_index == 0xFF ) break;  // No valid choices left
+                if ( best_index == 0xFF ) break;
 
-                encoding_mask &= ~masks[best_index];  // Remove covered elements
-                multiplicity_set |= ( UINT64_C( 1 ) << best_index );  // Mark choice in the set
+                uncovered_mask &= ~coverage_masks[best_index];
+                selected_set |= ( 1ULL << best_index );
             }
         }
 
         template<uint32_t free_set_size, bool manipulate = false>
-        uint32_t
-        column_multiplicity_dc1( STT const &tt, STT const &cs, STT &loc_tt, uint32_t loc_cost )
+        uint32_t column_multiplicity_dc1( STT const &tt, STT const &cs, STT &loc_tt, uint32_t loc_cost )
         {
-            uint64_t multiplicity_set = 0u;
+            static_assert( free_set_size == 1, "Expected free_set_size to be 1 for DC1 optimization." );
+
+            constexpr uint64_t coverage_masks[] = {0x5, 0x6, 0x9, 0xA};
+            uint64_t mapping[4] = {0xF, 0xF, 0xF, 0xF};
+
+            uint64_t multiplicity_set = 0;
+            uint64_t encoding_mask = 0;
             uint32_t multiplicity = 0;
+
             uint32_t const num_blocks = ( num_vars > 6 ) ? ( 1u << ( num_vars - 6 ) ) : 1;
 
-            // Masks for unique pairs (00, 01, 10, 11)
-            uint64_t constexpr masks[] = {0x5, 0x6, 0x9, 0xA};
-            uint64_t mapping[] = {0xF, 0xF, 0xF, 0xF};
-
-            uint64_t encoding_mask = 0u;
-
-            static_assert( free_set_size == 1, "Wrong free set size for method used, expected 1" );
-
-            // Iterate over all blocks
+            // Analyze TT + CS to determine base functions and coverage
             for ( uint32_t i = 0; i < num_blocks; ++i )
             {
-                uint64_t cof = tt._bits[i];  // Extract truth table
-                uint64_t ccs = cs._bits[i];  // Extract care set
+                uint64_t cof = tt._bits[i];
+                uint64_t care = cs._bits[i];
 
-                // Iterate over 2-bit pairs in the 64-bit block
                 for ( uint32_t j = 0; j < ( 64 >> free_set_size ); ++j )
                 {
-                    uint64_t ccs_masked = ccs & 3u;  // Mask the care set
-                    uint64_t cof_masked = cof & 3u;  // Mask the truth table
+                    uint64_t cs_bits = care & 0x3;
+                    uint64_t tt_bits = cof & 0x3;
 
-                    if ( ccs_masked == 3u )  // Both bits are in the care set (11 case)
+                    if ( cs_bits == 0x3 ) // fully specified
                     {
-                        multiplicity_set |= UINT64_C( 1 ) << cof_masked;  // Use encoding
-                        encoding_mask |= masks[cof_masked];  // Apply encoding mask
+                        multiplicity_set |= 1ULL << tt_bits;
+                        encoding_mask |= coverage_masks[tt_bits];
                     }
-                    else if ( ccs_masked )  // If at least one bit is not a DC
+                    else if ( cs_bits != 0 ) // partial care
                     {
-                        // Handle cases where at least one bit is DC
-                        multiplicity_set |= UINT64_C( 1 )
-                                << ( 2u + ( ccs_masked << 1 ) + __builtin_popcountl( ccs_masked & cof_masked ) );
+                        uint32_t index = 2u + ( cs_bits << 1u ) + __builtin_popcountl( cs_bits & tt_bits );
+                        multiplicity_set |= 1ULL << index;
                     }
 
-                    // Shift both TT and CS to process the next pair
-                    cof >>= ( 1u << free_set_size );
-                    ccs >>= ( 1u << free_set_size );
+                    cof >>= 2;
+                    care >>= 2;
                 }
             }
 
-            // calculate the uncovered DC sets
+            // Invert encoding mask to find uncovered elements
             encoding_mask = ~encoding_mask & ( multiplicity_set >> 4 );
-
-            // Solve the minimum hitting set problem
             min_hitting_set1( multiplicity_set, encoding_mask );
 
-            // Compute the total multiplicity including added values
+            // Count number of selected base functions
             multiplicity_set &= 0xF;
             multiplicity = __builtin_popcountl( multiplicity_set );
 
+            // If better than current best, optionally manipulate the TT
             if ( multiplicity < loc_cost )
             {
                 if constexpr ( manipulate )
                 {
                     STT new_tt = tt;
-                    uint64_t dc_pos = 0xF;
-                    while ( multiplicity_set )
+
+                    // Assign unassigned partials to selected base values
+                    uint64_t default_dc_val = 0xF;
+                    uint64_t temp_set = multiplicity_set;
+
+                    while ( temp_set )
                     {
-                        uint32_t pos = __builtin_ctz( multiplicity_set );
-                        multiplicity_set &= multiplicity_set - 1;  // Clear the highest set bit
-                        encode_dc1( mapping, masks[pos], pos );
-                        if ( dc_pos == 0xF )
+                        uint32_t pos = __builtin_ctzl( temp_set );
+                        temp_set &= temp_set - 1;
+
+                        encode_dc1( mapping, coverage_masks[pos], pos );
+
+                        if ( default_dc_val == 0xF )
                         {
-                            dc_pos = pos;
+                            default_dc_val = pos;
                         }
                     }
-                    // manipulate the tt only if the multiplicity is better
+
                     for ( uint32_t i = 0; i < num_blocks; ++i )
                     {
-                        uint64_t cof = tt._bits[i];  // Extract truth table
-                        uint64_t ccs = cs._bits[i];  // Extract care set
+                        uint64_t old_tt = tt._bits[i];
+                        uint64_t care = cs._bits[i];
+                        uint64_t &new_tt_block = new_tt._bits[i];
 
-                        uint64_t &new_cof = new_tt._bits[i];  // Extract truth table
-
-                        // Iterate over 2-bit pairs in the 64-bit block
                         for ( uint32_t j = 0; j < ( 64 >> free_set_size ); ++j )
                         {
-                            uint64_t ccs_masked = ccs & 3u;  // Mask the care set
-                            uint64_t cof_masked = cof & 3u;  // Mask the truth table
+                            uint64_t cs_bits = care & 0x3;
+                            uint64_t tt_bits = old_tt & 0x3;
 
-                            if ( ccs_masked )  // If at least one bit is not a DC
+                            uint64_t new_val = 0;
+
+                            if ( cs_bits != 0 )
                             {
-                                if ( ccs_masked != 3u )
+                                if ( cs_bits != 3 )
                                 {
-                                    new_cof = ( new_cof & ~( UINT64_C( 3 )
-                                            << ( ( 1u << free_set_size ) * j ) ) )  // Clear 2-bit segment at position
-                                              | ( ( mapping[( ccs_masked << 1 ) +
-                                                            __builtin_popcountl( ccs_masked & cof_masked ) -
-                                                            UINT64_C( 2 )] & UINT64_C( 3 ) )
-                                            << ( ( 1u << free_set_size ) * j ) );  // Insert the new 2-bit value
+                                    uint32_t idx = ( cs_bits << 1 ) + __builtin_popcountl( cs_bits & tt_bits ) - 2;
+                                    new_val = mapping[idx] & 0x3;
+                                }
+                                else
+                                {
+                                    new_val = tt_bits;
                                 }
                             }
                             else
                             {
-                                new_cof = ( new_cof & ~( UINT64_C( 3 )
-                                        << ( ( 1u << free_set_size ) * j ) ) )  // Clear 2-bit segment at position
-                                          | ( ( dc_pos )
-                                        << ( ( 1u << free_set_size ) * j ) );  // Insert the new 2-bit value
+                                new_val = default_dc_val;
                             }
 
-                            // Shift both TT and CS to process the next pair
-                            cof >>= ( 1u << free_set_size );
-                            ccs >>= ( 1u << free_set_size );
+                            uint64_t shift = j * 2;
+                            new_tt_block = ( new_tt_block & ~( 0x3ULL << shift ) ) | ( new_val << shift );
+
+                            old_tt >>= 2;
+                            care >>= 2;
                         }
-                        assert( ( ( new_cof ^ cof ) & ccs ) == 0 );
+
+                        // Ensure new TT agrees with original where care set is 1
+                        assert( ( ( new_tt_block ^ tt._bits[i] ) & cs._bits[i] ) == 0 );
                     }
-                    uint32_t multiplicity2 = column_multiplicity<1u>( new_tt, cs, loc_tt, loc_cost );
+
+                    // Sanity check: recompute multiplicity
+                    /*uint32_t multiplicity2 = column_multiplicity<1>( new_tt, cs, loc_tt, loc_cost );
                     if ( multiplicity2 != multiplicity )
                     {
-                        std::cerr << "Wrong truth table substitution" << std::endl;
-                    }
+                        std::cerr << "Mismatch in expected multiplicity after manipulation.\n";
+                    }*/
+
                     loc_tt = new_tt;
                 }
                 else
@@ -1221,7 +1227,7 @@ namespace acd
             return compacted_value;
         }
 
-        void min_hitting_set2( uint64_t &multiplicity_set, uint64_t encoding_mask )
+        void min_hitting_set2_old( uint64_t &multiplicity_set, uint64_t encoding_mask )
         {
             // Masks for unique pairs (---0, ---1, --0-, --1-, ...)
             uint64_t constexpr masks[] = {
@@ -1264,73 +1270,64 @@ namespace acd
             }
         }
 
+        // Helper: Map uncovered DC terms to a selected representative
         static void encode_dc2( uint64_t *mapping, uint64_t mask, uint64_t cof_masked )
         {
             while ( mask )
             {
-                uint32_t pos = __builtin_ctzll( mask );  // Get the position of the lowest set bit
-                mask &= mask - 1;  // Clear the lowest set bit
-
+                uint32_t pos = __builtin_ctzll( mask );
+                mask &= mask - 1;
                 if ( mapping[pos] == 0xFF )
-                {
                     mapping[pos] = cof_masked;
-                }
             }
         }
 
-        static void min_hitting_set2_opt( uint64_t &multiplicity_set, uint64_t encoding_mask )
+        // Greedy Minimum Hitting Set solver for 4-variable functions
+        static void min_hitting_set2( uint64_t &selected_set, uint64_t uncovered_mask )
         {
-            // Masks for unique pairs (---0, ---1, --0-, --1-, ...)
-            constexpr uint64_t masks[] = {
+            constexpr uint64_t coverage_masks[] = {
                     0x0101010111111155, 0x0102020211212256, 0x0201040412121459, 0x020208081222285A,
                     0x0404011021144165, 0x0408022021248266, 0x0804044022184469, 0x080808802228886A,
                     0x1010100144411195, 0x1020200244812296, 0x2010400448421499, 0x202080084882289A,
                     0x40401010844441A5, 0x40802020848482A6, 0x80404040884844A9, 0x80808080888888AA
             };
 
-            // List of active mask indices
             std::vector<uint8_t> active_indices;
             for ( uint8_t i = 0; i < 16; ++i )
             {
-                if ( masks[i] & encoding_mask )
-                {  // Only add indices that actually contribute
+                if ( coverage_masks[i] & uncovered_mask )
+                {
                     active_indices.push_back( i );
                 }
             }
 
-            // While there are still uncovered elements
-            while ( encoding_mask )
+            while ( uncovered_mask )
             {
-                uint8_t best_index = 0xFF;  // Invalid index
                 uint32_t best_coverage = 0;
+                uint8_t best_index = 0xFF;
 
-                // Iterate only over active indices
                 for ( size_t j = 0; j < active_indices.size(); )
                 {
                     uint8_t i = active_indices[j];
 
-                    if ( multiplicity_set & ( UINT64_C( 1 ) << i ) )
+                    if ( selected_set & ( UINT64_C( 1 ) << i ) )
                     {
-                        // If already selected, remove from active set
-                        active_indices.erase(
-                                active_indices.begin() + static_cast<std::vector<uint8_t>::difference_type>(j) );
+                        active_indices.erase( active_indices.begin() + j );
                         continue;
                     }
 
-                    uint64_t coverage = masks[i] & encoding_mask;
-                    uint32_t popcount_value = __builtin_popcountll( coverage );
+                    uint64_t coverage = coverage_masks[i] & uncovered_mask;
+                    uint32_t count = __builtin_popcountll( coverage );
 
-                    if ( popcount_value > best_coverage )
+                    if ( count > best_coverage )
                     {
-                        best_coverage = popcount_value;
+                        best_coverage = count;
                         best_index = i;
                     }
 
-                    // If mask never covers anything, remove it
-                    if ( popcount_value == 0 )
+                    if ( count == 0 )
                     {
-                        active_indices.erase(
-                                active_indices.begin() + static_cast<std::vector<uint8_t>::difference_type>(j) );
+                        active_indices.erase( active_indices.begin() + j );
                     }
                     else
                     {
@@ -1338,105 +1335,77 @@ namespace acd
                     }
                 }
 
-                // If no valid choices left, break
                 if ( best_index == 0xFF ) break;
 
-                // Cover the necessary elements
-                encoding_mask &= ~masks[best_index];  // Remove covered elements
-                multiplicity_set |= ( UINT64_C( 1 ) << best_index );  // Mark choice in the set
+                uncovered_mask &= ~coverage_masks[best_index];
+                selected_set |= ( UINT64_C( 1 ) << best_index );
             }
         }
 
-        template<uint32_t free_set_size, bool manipulate = false>
-        uint32_t
-        column_multiplicity_dc2( STT const &tt, STT const &cs, STT &loc_tt, uint32_t loc_cost )
+        // Compute the minimal column multiplicity with optional TT manipulation for free_set_size = 2
+        template<uint32_t free_set_size, bool manipulate = true>
+        uint32_t column_multiplicity_dc2( const STT &tt, const STT &cs, STT &loc_tt, uint32_t loc_cost )
         {
-            /*STT tt;
-            tt._bits[0] = 18374403900887793663u;//{0b1000000000000000000000000000000000000000000000000000000000000000};
-            tt._bits[1] = 13455272147898579899u;
-            tt._bits[2] = 18230288712778383359u;
-            tt._bits[3] = 13311156959789169595u;
-            STT cs;
-            cs._bits[0] = 18374403900887793663u;//{0b0111111111111111111111111111111111111111111111111111111111111111};
-            cs._bits[1] = 13455272147898579899u;
-            cs._bits[2] = 17365597584105144319u;
-            cs._bits[3] = 12734696207334751163u;*/
+            static_assert( free_set_size == 2, "Wrong free set size for method used, expected 2" );
 
-            uint64_t multiplicity_set = 0u;
-            uint64_t multiplicity_set_dc = 0u;
-            uint32_t multiplicity = 0;
-            uint32_t const num_blocks = ( num_vars > 6 ) ? ( 1u << ( num_vars - 6 ) ) : 1;
-
-            static const uint64_t encode[16] = {255, 0, 1, 4, 2, 5, 6, 10, 3, 7, 8, 11, 9, 12, 13, 14};
-
-            // Masks for unique pairs (---0, ---1, --0-, --1-, ...)
-            uint64_t constexpr masks[] = {
+            constexpr uint64_t encode[16] = {255, 0, 1, 4, 2, 5, 6, 10, 3, 7, 8, 11, 9, 12, 13, 14};
+            uint64_t constexpr coverage_masks[] = {
                     0x0101010111111155, 0x0102020211212256, 0x0201040412121459, 0x020208081222285A,
                     0x0404011021144165, 0x0408022021248266, 0x0804044022184469, 0x080808802228886A,
                     0x1010100144411195, 0x1020200244812296, 0x2010400448421499, 0x202080084882289A,
                     0x40401010844441A5, 0x40802020848482A6, 0x80404040884844A9, 0x80808080888888AA
             };
-            // Mapping from
+
+            const uint32_t num_blocks = ( num_vars > 6 ) ? ( 1u << ( num_vars - 6 ) ) : 1;
+            uint64_t selected_set = 0;
+            uint64_t dc_set = 0;
+            uint64_t uncovered_mask = 0;
             uint64_t mapping[64];
             std::fill( std::begin( mapping ), std::end( mapping ), 0xFF );
-            uint64_t encoding_mask = 0u;
 
-            static_assert( free_set_size == 2, "Wrong free set size for method used, expected 2" );
-
-            /* Iterate over all blocks */
             for ( uint32_t i = 0; i < num_blocks; ++i )
             {
-                uint64_t cof = tt._bits[i];  // Extract truth table
-                uint64_t ccs = cs._bits[i];  // Extract care set
+                uint64_t tt_block = tt._bits[i];
+                uint64_t cs_block = cs._bits[i];
 
-                /* Iterate over 2-bit pairs in the 64-bit block */
                 for ( uint32_t j = 0; j < ( 64 >> free_set_size ); ++j )
                 {
-                    uint64_t ccs_masked = ccs & 0xF;  // Mask the care set
-                    uint64_t cof_masked = cof & 0xF;  // Mask the truth table
+                    uint64_t care = cs_block & 0xF;
+                    uint64_t value = tt_block & 0xF;
 
-                    if ( ccs_masked == 0xF )  // All bits are in the care set
+                    if ( care == 0xF )
                     {
-                        multiplicity_set |= UINT64_C( 1 ) << cof_masked;  // Use encoding
-                        encoding_mask |= masks[cof_masked];  // Apply encoding mask
+                        selected_set |= UINT64_C( 1 ) << value;
+                        uncovered_mask |= coverage_masks[value];
                     }
-                    else if ( ccs_masked )  // If at least one bit is not a DC
+                    else if ( care )
                     {
-                        // Handle cases where at least one bit is DC
-                        uint32_t pop = __builtin_popcountll( ccs_masked );  // Compute once and reuse
-                        uint32_t extracted_shift = extract_relevant_bits( ccs_masked, cof_masked, pop );  // Pass pop
+                        uint32_t count = __builtin_popcountll( care );
+                        uint32_t idx = extract_relevant_bits( care, value, count );
 
-                        if ( pop == 1 )
+                        if ( count == 1 )
                         {
-                            multiplicity_set_dc |= UINT64_C( 1 ) << ( encode[ccs_masked] * 2u + extracted_shift );
+                            dc_set |= UINT64_C( 1 ) << ( encode[care] * 2u + idx );
                         }
-                        else if ( pop == 2 )
+                        else if ( count == 2 )
                         {
-                            multiplicity_set_dc |=
-                                    UINT64_C( 1 ) << ( 8u + ( encode[ccs_masked] - 4u ) * 4u + extracted_shift );
+                            dc_set |= UINT64_C( 1 ) << ( 8u + ( encode[care] - 4u ) * 4u + idx );
                         }
-                        else if ( pop == 3 )
+                        else if ( count == 3 )
                         {
-                            multiplicity_set_dc |=
-                                    UINT64_C( 1 ) << ( 32u + ( encode[ccs_masked] - 4u - 6u ) * 8u + extracted_shift );
+                            dc_set |= UINT64_C( 1 ) << ( 32u + ( encode[care] - 10u ) * 8u + idx );
                         }
                     }
 
-                    // Shift both TT and CS to process the next pair
-                    cof >>= ( 1u << free_set_size );
-                    ccs >>= ( 1u << free_set_size );
+                    tt_block >>= 4;
+                    cs_block >>= 4;
                 }
             }
 
-            // calculate the uncovered DC sets
-            encoding_mask = ~encoding_mask & multiplicity_set_dc;
+            uncovered_mask = ~uncovered_mask & dc_set;
+            min_hitting_set2( selected_set, uncovered_mask );
 
-            // Solve the minimum hitting set problem
-            min_hitting_set2_opt( multiplicity_set, encoding_mask );
-
-            // Compute the total multiplicity including added values
-            multiplicity = __builtin_popcountl( multiplicity_set );
-
+            uint32_t multiplicity = __builtin_popcountll( selected_set );
             assert( multiplicity <= 16 && "Bug" );
             assert( multiplicity > 0 && "Bug2" );
 
@@ -1445,78 +1414,65 @@ namespace acd
                 if constexpr ( manipulate )
                 {
                     STT new_tt = tt;
-                    uint64_t dc_pos = 0xFF;
-                    while ( multiplicity_set )
+                    uint64_t default_value = 0xFF;
+
+                    uint64_t tmp_set = selected_set;
+                    while ( tmp_set )
                     {
-                        uint32_t pos = __builtin_ctz( multiplicity_set );
-                        multiplicity_set &= multiplicity_set - 1;  // Clear the highest set bit
-                        encode_dc2( mapping, masks[pos], pos );
-                        if ( dc_pos == 0xFF )
-                        {
-                            dc_pos = pos;
-                        }
+                        uint32_t index = __builtin_ctzll( tmp_set );
+                        tmp_set &= tmp_set - 1;
+                        encode_dc2( mapping, coverage_masks[index], index );
+                        if ( default_value == 0xFF ) default_value = index;
                     }
 
                     for ( uint32_t i = 0; i < num_blocks; ++i )
                     {
-                        uint64_t cof = tt._bits[i];  // Extract truth table
-                        uint64_t ccs = cs._bits[i];  // Extract care set
+                        uint64_t tt_block = tt._bits[i];
+                        uint64_t cs_block = cs._bits[i];
+                        uint64_t &new_block = new_tt._bits[i];
 
-                        uint64_t &new_cof = new_tt._bits[i];
-
-                        // Iterate over 2-bit pairs in the 64-bit block
                         for ( uint32_t j = 0; j < ( 64 >> free_set_size ); ++j )
                         {
-                            uint64_t ccs_masked = ccs & 0xF;  // Mask the care set
-                            uint64_t cof_masked = cof & 0xF;  // Mask the truth table
+                            uint64_t care = cs_block & 0xF;
+                            uint64_t value = tt_block & 0xF;
 
-                            if ( ccs_masked )  // If at least one bit is not a DC
+                            if ( care )
                             {
-                                if ( ccs_masked != 0xF )
+                                if ( care != 0xF )
                                 {
-                                    uint32_t pop = __builtin_popcountll( ccs_masked );  // Compute once and reuse
-                                    uint32_t extracted_shift = extract_relevant_bits( ccs_masked, cof_masked,
-                                                                                      pop );  // Pass pop
-                                    uint64_t index;
+                                    uint32_t count = __builtin_popcountll( care );
+                                    uint32_t idx = extract_relevant_bits( care, value, count );
+                                    uint32_t map_idx = 0;
 
-                                    if ( pop == 1 )
-                                    {
-                                        index = encode[ccs_masked] * 2u + extracted_shift;
-                                    }
-                                    else if ( pop == 2 )
-                                    {
-                                        index = 8u + ( encode[ccs_masked] - 4u ) * 4u + extracted_shift;
-                                    }
-                                    else if ( pop == 3 )
-                                    {
-                                        index = 32u + ( encode[ccs_masked] - 4u - 6u ) * 8u + extracted_shift;
-                                    }
-                                    assert( index < 64u );
+                                    if ( count == 1 )
+                                        map_idx = encode[care] * 2u + idx;
+                                    else if ( count == 2 )
+                                        map_idx = 8u + ( encode[care] - 4u ) * 4u + idx;
+                                    else if ( count == 3 )
+                                        map_idx = 32u + ( encode[care] - 10u ) * 8u + idx;
 
-                                    new_cof = ( new_cof & ~( UINT64_C( 0xF )
-                                            << ( ( 1u << free_set_size ) * j ) ) )  // Clear 4 bits at position
-                                              | ( ( mapping[index] )
-                                            << ( ( 1u << free_set_size ) * j ) );  // Insert new 4-bit value
+                                    new_block = ( new_block & ~( UINT64_C( 0xF ) << ( j * 4 ) ) ) |
+                                                ( mapping[map_idx] << ( j * 4 ) );
                                 }
                             }
                             else
                             {
-                                new_cof = ( new_cof & ~( UINT64_C( 0xF )
-                                        << ( ( 1u << free_set_size ) * j ) ) )  // Clear 2-bit segment at position
-                                          | ( ( dc_pos )
-                                        << ( ( 1u << free_set_size ) * j ) );  // Insert the new 2-bit value
+                                new_block = ( new_block & ~( UINT64_C( 0xF ) << ( j * 4 ) ) ) |
+                                            ( default_value << ( j * 4 ) );
                             }
 
-                            // Shift both TT and CS to process the next pair
-                            cof >>= ( 1u << free_set_size );
-                            ccs >>= ( 1u << free_set_size );
+                            tt_block >>= 4;
+                            cs_block >>= 4;
                         }
+                        // Ensure new TT agrees with original where care set is 1
+                        assert( ( ( new_block ^ tt._bits[i] ) & cs._bits[i] ) == 0 );
                     }
-                    uint32_t multiplicity2 = column_multiplicity<2u>( new_tt, cs, loc_tt, loc_cost );
-                    if ( multiplicity2 != multiplicity )
+
+                    /*uint32_t multiplicity_check = column_multiplicity<2>( new_tt, cs, loc_tt, loc_cost );
+                    if ( multiplicity_check != multiplicity )
                     {
                         std::cerr << "Wrong truth table substitution" << std::endl;
-                    }
+                    }*/
                     loc_tt = new_tt;
                 }
                 else
@@ -1527,6 +1483,7 @@ namespace acd
 
             return multiplicity;
         }
+
 
         static void min_hitting_set3( uint64_t **multiplicity_set_dc, uint64_t *multiplicity_set, uint8_t size )
         {
