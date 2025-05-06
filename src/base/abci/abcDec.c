@@ -678,14 +678,13 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
     } else if ( DecType == 7)
     {
         int nNodes1 = 0;
-        unsigned cost1 = 1;
-        unsigned cost2 = 1;
+
         int use_late_arrival = 0;
         int count11 = 0, count12 = 0, count13 = 0, count21 = 0, count22 = 0, count23 = 0;
         int LutSize = 6;
 
         int n = p->nVars;  // Number of bits in total
-        int f = 4;  // Number of late arriving variables
+        int f = 1;  // Number of late arriving variables
         unsigned delay = ( 1 << f ) - 1; // Initial bit pattern with f bits set
 
         abctime total_time_evaluate = 0;
@@ -701,6 +700,7 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
             printf( "\n" );
             for ( i = 0; i < p->nFuncs - 1; i += 2 )
             {
+                unsigned cost1 = 1;
                 unsigned delay1 = delay;
                 abctime start_evaluate = Abc_Clock();
                 int val1 = acd_evaluate( p->pFuncs[i], p->nVars, LutSize, &delay1, &cost1, !use_late_arrival );
@@ -710,17 +710,21 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
                 if ( val1 == 1 )
                 {
                     ++count11;
-                } else if ( val1 == 2 )
+                }
+                else if ( val1 == 2 )
                 {
                     ++count12;
-                } else
+                }
+                else
                 {
                     ++count13;
+                    continue;
                 }
                 nNodes += cost1;
             }
             for ( i = 0; i < p->nFuncs - 1; i += 2 )
             {
+                unsigned cost2 = 1;
                 unsigned delay2 = delay;
                 abctime start_evaluate = Abc_Clock();
                 int val2 = acd_dc_evaluate( p->pFuncs[i], p->pFuncs[i + 1], p->nVars, LutSize, &delay2, &cost2,
@@ -731,12 +735,15 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
                 if ( val2 == 1 )
                 {
                     ++count21;
-                } else if ( val2 == 2 )
+                }
+                else if ( val2 == 2 )
                 {
                     ++count22;
-                } else
+                }
+                else
                 {
                     ++count23;
+                    continue;
                 }
                 nNodes1 += cost2;
                 // break;
@@ -751,7 +758,7 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
             unsigned ripple = x + smallest;
             unsigned new_bits = ( ( ripple ^ x ) >> 2 ) / smallest;
             delay = ripple | new_bits;
-            break;
+            // break;
         }
         // Compute decomposable function counts
         int decomposable_acd = count11 + count12;
@@ -768,12 +775,14 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
         Abc_PrintTime( 1, "Time_wo_dc", total_time_evaluate );
         printf( "1lvl: %i\n", count11 );
         printf( "2lvl: %i\n", count12 );
+        printf( "Decomposition ratio (1lvl): %.2f%%\n", ( 100.0 * count11 ) / ( count11 + count12 ) );
         printf( "LUTs per decomposable function =%9.2f\n", lut_per_func_acd );
         printf( "Not Decomposable: %i\n", count13 );
         printf( "======ACD with DCs=======\n" );
         Abc_PrintTime( 1, "Time_w_dc", total_time_dc_evaluate );
         printf( "1lvl: %i\n", count21 );
         printf( "2lvl: %i\n", count22 );
+        printf( "Decomposition ratio (1lvl): %.2f%%\n", ( 100.0 * count21 ) / ( count21 + count22 ) );
         printf( "LUTs per decomposable function =%9.2f\n", lut_per_func_acd_dc );
         printf( "Not Decomposable: %i\n", count23 );
         printf( "1lvl Decomposition improvement = %9.2f percent\n", 100.0 * ( count21 - count11 ) / count11 );

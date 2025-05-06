@@ -307,12 +307,12 @@ namespace acd
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc5<4u>( tt, cs, loc_tt, loc_cost ); },
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc5<5u>( tt, cs, loc_tt, loc_cost ); } };
 
-            std::function<uint32_t( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost )> column_multiplicity_fn[5] = {
+           /* std::function<uint32_t( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost )> column_multiplicity_fn[5] = {
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity<1u>( tt, cs, loc_tt, loc_cost ); },
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity<2u>( tt, cs, loc_tt, loc_cost); },
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity<3u>( tt, cs, loc_tt, loc_cost); },
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity5<4u>( tt, cs, loc_tt, loc_cost ); },
-                    [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity5<5u>( tt, cs, loc_tt, loc_cost ); } };
+                    [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity5<5u>( tt, cs, loc_tt, loc_cost ); } };*/
 
             /* find a feasible AC decomposition */
             // for ( uint32_t i = std::min( ps.lut_size - 1, ps.max_free_set_vars); i >= start; --i )
@@ -363,7 +363,7 @@ namespace acd
 
                 for ( uint32_t i = start; i <= ps.lut_size - 1 && i <= ps.max_free_set_vars; ++i )
                 {
-                    auto ret_tuple = enumerate_iset_combinations( i, 0, column_multiplicity_fn[i - 1] );
+                    auto ret_tuple = enumerate_iset_combinations( i, 0, column_multiplicity_fn_dc[i - 1] );
                     uint32_t multiplicity = std::get<3>( ret_tuple );
 
                     /* additional cost if not support reducing */
