@@ -213,6 +213,7 @@ static int Abc_CommandExdcGet                ( Abc_Frame_t * pAbc, int argc, cha
 static int Abc_CommandExdcSet                ( Abc_Frame_t * pAbc, int argc, char ** argv );
 static int Abc_CommandCareSet                ( Abc_Frame_t * pAbc, int argc, char ** argv );
 static int Abc_CommandCut                    ( Abc_Frame_t * pAbc, int argc, char ** argv );
+static int Abc_CommandSatDc                  ( Abc_Frame_t * pAbc, int argc, char ** argv );
 static int Abc_CommandEspresso               ( Abc_Frame_t * pAbc, int argc, char ** argv );
 static int Abc_CommandGen                    ( Abc_Frame_t * pAbc, int argc, char ** argv );
 static int Abc_CommandGenTF                  ( Abc_Frame_t * pAbc, int argc, char ** argv );
@@ -1012,6 +1013,7 @@ void Abc_Init( Abc_Frame_t * pAbc )
     Cmd_CommandAdd( pAbc, "Various",      "exdc_set",      Abc_CommandExdcSet,          1 );
     Cmd_CommandAdd( pAbc, "Various",      "care_set",      Abc_CommandCareSet,          1 );
     Cmd_CommandAdd( pAbc, "Various",      "cut",           Abc_CommandCut,              0 );
+    Cmd_CommandAdd( pAbc, "Various",      "sat_dc",        Abc_CommandSatDc,            0 );
     Cmd_CommandAdd( pAbc, "Various",      "espresso",      Abc_CommandEspresso,         1 );
     Cmd_CommandAdd( pAbc, "Various",      "gen",           Abc_CommandGen,              0 );
     Cmd_CommandAdd( pAbc, "Various",      "gentf",         Abc_CommandGenTF,            0 );
@@ -13801,6 +13803,58 @@ usage:
     Abc_Print( -2, "\t-h     : print the command usage\n");
     return 1;
 }
+
+/**Function*************************************************************
+
+  Synopsis    []
+
+  Description []
+
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+int Abc_CommandSatDc( Abc_Frame_t * pAbc, int argc, char ** argv )
+{
+    int cutSize = -1;
+    int fVerbose = 0;
+    int c;
+
+    Extra_UtilGetoptReset();
+    while ( ( c = Extra_UtilGetopt( argc, argv, "Kv" ) ) != EOF )
+    {
+        switch ( c )
+        {
+            case 'K':
+                cutSize = atoi( argv[globalUtilOptind] );
+                globalUtilOptind++;
+                break;
+            case 'v':
+                fVerbose = 1;
+                break;
+            default:
+                goto usage;
+        }
+    }
+
+    if ( cutSize < 2 )
+    {
+        Abc_Print( -1, "Error: Cut size K must be >= 2.\n" );
+        return 1;
+    }
+
+    Abc_Print( 1, "Command 'sat_dc' called with K = %d, verbose = %d\n", cutSize, fVerbose );
+    // Place your implementation here.
+    return 0;
+
+    usage:
+    Abc_Print( -2, "usage: sat_dc -K <cut_size> [-v]\n" );
+    Abc_Print( -2, "\t       -K <cut_size> : use only cuts of exactly this size\n" );
+    Abc_Print( -2, "\t       -v            : enables verbose output\n" );
+    return 1;
+}
+
 
 /**Function*************************************************************
 
