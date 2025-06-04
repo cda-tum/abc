@@ -18,6 +18,7 @@
 
 ***********************************************************************/
 
+#include <stdint.h>
 #include "if.h"
 #include "ifCount.h"
 #include "bool/kit/kit.h"
@@ -412,6 +413,320 @@ int If_CutLutBalanceEval( If_Man_t * p, If_Cut_t * pCut )
     }
 }
 
+static inline int If_NodeGetLeafCostOne( If_Obj_t * pObj )
+{
+    int Cost;
+
+    assert( pObj->fVisit == 1 );  // must be in the current cone
+
+    if ( If_ObjIsCi( pObj ) )
+        return 999;
+
+    Cost = (!If_ObjFanin0(pObj)->fVisit) + (!If_ObjFanin1(pObj)->fVisit);
+
+    return Cost;
+}
+
+int If_ManCreateWindow( If_Man_t * p, If_Obj_t * pObj, If_Cut_t * pCut, Vec_Int_t * vNodes, int maxLeaves )
+{
+    If_Obj_t * pLeaf, * pFanin, * pBest = NULL;
+    int i, bestCost, bestPos, cost;
+
+    // Reset fVisit across the network
+    If_ManCleanMarkV( p );
+
+    // Initialize window with fanins of pObj
+    p->pWindow->nLeaves = 0;
+    Vec_IntPush( vNodes, pObj->Id );
+
+    pFanin = If_ObjFanin0( pObj );
+    pFanin->fVisit = 1;
+    p->pWindow->pLeaves[ p->pWindow->nLeaves++ ] = pFanin->Id;
+    Vec_IntPush( vNodes, pFanin->Id );
+
+    pFanin = If_ObjFanin1( pObj );
+    pFanin->fVisit = 1;
+    p->pWindow->pLeaves[ p->pWindow->nLeaves++ ] = pFanin->Id;
+    Vec_IntPush( vNodes, pFanin->Id );
+
+    // Greedily expand the window
+    while ( 1 )
+    {
+        bestCost = 100;
+        bestPos = -1;
+        pBest = NULL;
+
+        for ( i = 0; i < p->pWindow->nLeaves; ++i )
+        {
+            pLeaf = If_ManObj( p, p->pWindow->pLeaves[i] );
+            cost = If_NodeGetLeafCostOne( pLeaf );
+
+            if ( cost < bestCost || (cost == bestCost && pBest && pLeaf->Level > pBest->Level) )
+            {
+                bestCost = cost;
+                bestPos = i;
+                pBest = pLeaf;
+            }
+
+            if ( bestCost == 0 )
+                break;
+        }
+
+        if ( pBest == NULL || p->pWindow->nLeaves - 1 + bestCost > maxLeaves )
+            break;
+
+        // Remove pBest from leaves
+        for ( i = bestPos; i < p->pWindow->nLeaves - 1; ++i )
+            p->pWindow->pLeaves[i] = p->pWindow->pLeaves[i + 1];
+        p->pWindow->nLeaves--;
+
+        // Add fanins of pBest
+        pFanin = If_ObjFanin0( pBest );
+        if ( !pFanin->fVisit )
+        {
+            pFanin->fVisit = 1;
+            p->pWindow->pLeaves[ p->pWindow->nLeaves++ ] = pFanin->Id;
+            Vec_IntPush( vNodes, pFanin->Id );
+        }
+
+        pFanin = If_ObjFanin1( pBest );
+        if ( !pFanin->fVisit )
+        {
+            pFanin->fVisit = 1;
+            p->pWindow->pLeaves[ p->pWindow->nLeaves++ ] = pFanin->Id;
+            Vec_IntPush( vNodes, pFanin->Id );
+        }
+
+        assert( p->pWindow->nLeaves <= maxLeaves );
+    }
+
+    // Check if all leaves in pCut are contained
+    for ( i = 0; i < (int)pCut->nLeaves; ++i )
+    {
+        If_Obj_t * pCutLeaf = If_ManObj( p, pCut->pLeaves[i] );
+        if ( !pCutLeaf->fVisit )
+        {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+static const word s_Proj6[6] = {
+        0xaaaaaaaaaaaaaaaaULL, // x0 = 101010...
+        0xccccccccccccccccULL, // x1 = 11001100...
+        0xf0f0f0f0f0f0f0f0ULL, // x2 = 11110000...
+        0xff00ff00ff00ff00ULL, // x3 = 8-8 alternating 0s/1s
+        0xffff0000ffff0000ULL, // x4 = 16-16 alternating
+        0xffffffff00000000ULL  // x5 = 32-32 alternating
+};
+
+void If_ManTruthCreateVar( word* pTruth, int nVars, int varIdx, int fCompl )
+{
+    assert( varIdx < nVars );
+    assert( nVars <= 12 );
+
+    const int nBits  = (1 << nVars);
+    const word nWords = ( nVars <= 6 ) ? 1 : ( 1 << ( nVars - 6 ) );
+
+    if ( varIdx < 6 && nVars <= 6 )
+    {
+        pTruth[0] = fCompl ? ~s_Proj6[varIdx] : s_Proj6[varIdx];
+        // Mask unused bits in the last word
+        if ( nBits < 64 )
+        {
+            pTruth[0] &= ~(~(word)0 << nBits);
+        }
+        return;
+    }
+
+    if ( varIdx < 6 )
+    {
+        word pattern = fCompl ? ~s_Proj6[varIdx] : s_Proj6[varIdx];
+        for ( int i = 0; i < nWords; ++i )
+            pTruth[i] = pattern;
+        return;
+    }
+
+    // varIdx ≥ 6 → alternating blocks
+    const int c = 1 << ( varIdx - 6 );
+    const word zero = UINT64_C( 0 );
+    const word one = ~zero;
+    ABC_UINT64_T block = UINT64_C( 0 );
+
+    while ( block < nWords )
+    {
+        for ( int i = 0; i < c; ++i )
+        {
+            pTruth[block++] = fCompl ? one : zero;
+        }
+        for ( int i = 0; i < c; ++i )
+        {
+            pTruth[block++] = fCompl ? zero : one;
+        }
+    }
+}
+
+void If_ManSimulateWindow( If_Man_t* p, If_Obj_t * pRoot, If_Cut_t* pCut, Vec_Int_t* vNodes, Vec_Ptr_t* vSimTts )
+{
+    int Entry, i;
+    int nWords = ( p->pWindow->nLeaves <= 6 ) ? 1 : ( 1 << ( p->pWindow->nLeaves - 6 ) );
+
+    // Initialize PI values for each leaf of the window
+    for ( i = 0; i < p->pWindow->nLeaves; ++i )
+    {
+        int piId = p->pWindow->pLeaves[i];
+        word* pTruth = ABC_ALLOC( word, nWords );
+        If_ManTruthCreateVar( pTruth, p->pWindow->nLeaves, i, 0 );
+        Vec_PtrWriteEntry( vSimTts, piId, pTruth );
+    }
+
+    // Simulate internal nodes in DFS order
+    Vec_IntForEachEntry( vNodes, Entry, i )
+    {
+        If_Obj_t* pObj = If_ManObj( p, Entry );
+
+        word* pFan0Orig = (word*)Vec_PtrEntry( vSimTts, If_ObjFanin0(pObj)->Id );
+        word* pFan1Orig = (word*)Vec_PtrEntry( vSimTts, If_ObjFanin1(pObj)->Id );
+
+        // Allocate result for this node
+        word* pResult = ABC_ALLOC( word, nWords );
+
+        // Handle complemented fanins using temp copies
+        word* pFan0 = ABC_ALLOC( word, nWords );
+        word* pFan1 = ABC_ALLOC( word, nWords );
+        Abc_TtCopy( pFan0, pFan0Orig, nWords, If_ObjFaninC0(pObj) );
+        Abc_TtCopy( pFan1, pFan1Orig, nWords, If_ObjFaninC1(pObj) );
+
+        // Compute AND and store result
+        Abc_TtAnd( pResult, pFan0, pFan1, nWords, 0 );
+        Vec_PtrWriteEntry( vSimTts, pObj->Id, pResult );
+
+        ABC_FREE( pFan0 );
+        ABC_FREE( pFan1 );
+    }
+}
+
+void If_ManSortWindowNodes( If_Man_t * p, Vec_Int_t * vNodes )
+{
+    int i, Entry;
+    If_Obj_t * pObj;
+
+    If_ManCleanMarkV( p );
+
+    Vec_Int_t * vTemp = Vec_IntAlloc( Vec_IntSize( vNodes ) );
+
+    for ( i = 0; i < (int)p->pWindow->nLeaves; ++i )
+    {
+        pObj = If_ManObj( p, p->pWindow->pLeaves[i] );
+        pObj->fVisit = 1;
+        // Vec_IntPush( vTemp, pObj->Id );
+    }
+
+    int nRemain = Vec_IntSize( vNodes ) - p->pWindow->nLeaves;
+    int nAdded = 1;
+
+    while ( nRemain && nAdded )
+    {
+        nAdded = 0;
+        Vec_IntForEachEntry( vNodes, Entry, i )
+        {
+            pObj = If_ManObj( p, Entry );
+            if ( pObj->fVisit )
+                continue;
+
+            If_Obj_t * pFanin0 = If_ObjFanin0( pObj );
+            If_Obj_t * pFanin1 = If_ObjFanin1( pObj );
+
+            if ( pFanin0->fVisit && pFanin1->fVisit )
+            {
+                pObj->fVisit = 1;
+                Vec_IntPush( vTemp, Entry );
+                ++nAdded;
+            }
+        }
+        nRemain -= nAdded;
+    }
+
+    if ( nRemain > 0 )
+        printf( "Warning: Not all window nodes were sorted due to unresolved fanins.\n" );
+
+    // Step 4: Overwrite vNodes with sorted result
+    Vec_IntClear( vNodes );
+    Vec_IntForEachEntry( vTemp, Entry, i )
+        Vec_IntPush( vNodes, Entry );
+
+    Vec_IntFree( vTemp );
+}
+
+word If_ManGetBit( const word * pTt, int index )
+{
+    return ( pTt[index >> 6] >> ( index & 0x3f ) ) & 0x1;
+}
+
+void If_ManSetBit( word * pTt, int index )
+{
+    pTt[index >> 6] |= UINT64_C( 1 ) << ( index & 0x3f );
+}
+
+void If_ManComputeCareSet( If_Cut_t * pCut, Vec_Ptr_t * vSimTts, word * pCareSet, int nVars )
+{
+    for ( int i = 0; i < ( 1u << nVars ); ++i )
+    {
+        word entry = 0;
+        for ( int j = 0; j < pCut->nLeaves; j++ )
+        {
+            int LeafId = pCut->pLeaves[j];
+            const word * NodeTt = Vec_PtrEntry(vSimTts, LeafId);
+            entry |= If_ManGetBit( NodeTt, i ) << j;
+        }
+        If_ManSetBit( pCareSet, (int)entry );
+    }
+}
+
+int If_ExtractDc( If_Man_t * p, If_Cut_t * pCut, If_Obj_t * pObj, word * pCareSet )
+{
+    int maxLeaves = 12;
+    int ret = 0;
+
+    // Allocate the node vector
+    Vec_Int_t * vNodes = Vec_IntAlloc( 64 ); // initial capacity; growable
+
+    // Clear the reusable window
+    memset( p->pWindow, 0, sizeof(If_Cut_t) + sizeof(int) * ( maxLeaves + p->nPermWords ) );
+
+    // Create and simulate the window
+    if ( If_ManCreateWindow( p, pObj, pCut, vNodes, maxLeaves ) )
+    {
+        If_ManSortWindowNodes( p, vNodes );
+        Vec_Ptr_t* vSimTts = Vec_PtrStart( If_ManObjNum(p) );
+        If_ManSimulateWindow( p, pObj, pCut, vNodes, vSimTts );
+        If_ManComputeCareSet( pCut, vSimTts, pCareSet, pCut->nLeaves );
+        for ( int i = 0; i < If_ManObjNum(p); ++i )
+        {
+            word* pE = (word*)Vec_PtrEntry( vSimTts, i );
+            if ( pE )
+                ABC_FREE( pE );
+        }
+        Vec_PtrFree( vSimTts );
+        ret = 1;
+    }
+    else
+    {
+        int nWords = ( pCut->nLeaves <= 6 ) ? 1 : ( 1 << ( pCut->nLeaves - 6 ) );
+        for ( int i = 0; i < nWords; ++i )
+        {
+            pCareSet[i] = 0xffffffffffffffffULL;
+        }
+    }
+
+    // Free node vector
+    Vec_IntFree( vNodes );
+
+    return ret;
+}
+
 int If_LutDecEval( If_Man_t * p, If_Cut_t * pCut, If_Obj_t * pObj, int optDelay, int fFirst )
 {
     pCut->fUser = 1;
@@ -488,8 +803,16 @@ int If_LutDecEval( If_Man_t * p, If_Cut_t * pCut, If_Obj_t * pObj, int optDelay,
         }
     }
 
+    // extract the care set
+    int nWords = ( pCut->nLeaves <= 6 ) ? 1 : ( 1 << ( pCut->nLeaves - 6 ) );
+    word* pCareSet = ABC_ALLOC( word, nWords );
+    memset( pCareSet, 0, sizeof(word) * nWords );
+    If_ExtractDc(p, pCut, pObj, pCareSet);
+    ABC_FREE( pCareSet );
+
     /* returns the delay of the decomposition */
     word *pTruth = If_CutTruthW( p, pCut );
+    // acd pointer
     int val = acd_evaluate( pTruth, pCut->nLeaves, LutSize, &uLeafMask, &cost, !use_late_arrival );
 
     /* not feasible decomposition */

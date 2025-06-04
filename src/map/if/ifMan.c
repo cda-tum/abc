@@ -91,6 +91,9 @@ If_Man_t * If_ManStart( If_Par_t * pPars )
     p->nCutBytes   = sizeof(If_Cut_t) + sizeof(int) * (p->pPars->nLutSize + p->nPermWords);
     p->nSetBytes   = sizeof(If_Set_t) + (sizeof(If_Cut_t *) + p->nCutBytes) * (p->pPars->nCutsMax + 1);
     p->pMemObj     = Mem_FixedStart( p->nObjBytes );
+    // Allocate reusable window structure
+    if ( p->pPars->fUserLutDecDc )
+        p->pWindow = (If_Cut_t *)ABC_ALLOC( char, sizeof(If_Cut_t) + sizeof(int) * ( 12 + p->nPermWords) );
     // report expected memory usage
     if ( p->pPars->fVerbose )
         Abc_Print( 1, "K = %d. Memory (bytes): Truth = %4d. Cut = %4d. Obj = %4d. Set = %4d. CutMin = %s\n", 
@@ -247,6 +250,8 @@ void If_ManStop( If_Man_t * p )
         p->pIfDsdMan = NULL;
     if ( p->pPars->fUseDsd && (p->nCountNonDec[0] || p->nCountNonDec[1]) )
         printf( "NonDec0 = %d.  NonDec1 = %d.\n", p->nCountNonDec[0], p->nCountNonDec[1] );
+    if ( p->pPars->fUserLutDecDc )
+        ABC_FREE( p->pWindow );
     Vec_IntFreeP( &p->vCoAttrs );
     Vec_PtrFree( p->vCis );
     Vec_PtrFree( p->vCos );

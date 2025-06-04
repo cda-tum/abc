@@ -148,6 +148,7 @@ struct If_Par_t_
     int                fDoAverage;    // optimize average rather than maximum level
     int                fHashMapping;  // perform AIG hashing after mapping
     int                fUserLutDec;   // perform Boolean decomposition during mapping
+    int                fUserLutDecDc; // perform Boolean decomposition during mapping
     int                fUserLut2D;    // perform Boolean decomposition during mapping
     int                fVerbose;      // the verbosity flag
     int                fVerboseTrace; // the verbosity flag
@@ -277,6 +278,7 @@ struct If_Man_t_
     int                nBestCutSmall[2];
     int                nCountNonDec[2];
     Vec_Int_t *        vCutData;      // cut data storage
+    If_Cut_t *         pWindow; // reusable cut structure used as a window for simulation
     int                pArrTimeProfile[IF_MAX_FUNC_LUTSIZE];
     Vec_Ptr_t *        vVisited;
     void *             pUserMan;
@@ -706,6 +708,7 @@ extern int             If_ManCountSpecialPos( If_Man_t * p );
 extern void            If_CutTraverse( If_Man_t * p, If_Obj_t * pRoot, If_Cut_t * pCut, Vec_Ptr_t * vNodes );
 extern void            If_ObjPrint( If_Obj_t * pObj );
 
+// acd pointer
 extern int             acd_evaluate( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned *cost, int try_no_late_arrival );
 extern int             acd_decompose( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned char *decomposition );
 extern int             acd2_evaluate( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned *cost, int try_no_late_arrival );

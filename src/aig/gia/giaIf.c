@@ -1444,6 +1444,7 @@ int Gia_ManFromIfLogicHop( Gia_Man_t * pNew, If_Man_t * pIfMan, If_Cut_t * pCutB
     assert( pCutBest->nLeaves > pIfMan->pPars->nLutDecSize );
 
     unsigned delayProfile = pCutBest->decDelay;
+    // acd pointer
     val = acd_decompose( pTruth, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delayProfile), decompArray );
     assert( val == 0 );
 

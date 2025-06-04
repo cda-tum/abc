@@ -20219,6 +20219,8 @@ int Abc_CommandIf( Abc_Frame_t * pAbc, int argc, char ** argv )
             }
             pPars->nLutDecSize = atoi(argv[globalUtilOptind]);
             pPars->fUserLutDec = 1;
+            // ToDo: This flag should be passed as an additional option
+            pPars->fUserLutDecDc = 1;
             globalUtilOptind++;
             if ( pPars->nLutDecSize < 3 || pPars->nLutDecSize > 6 )
                 goto usage;
