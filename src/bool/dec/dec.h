@@ -121,6 +121,7 @@ extern int             acd_decompose( word * pTruth, unsigned nVars, int lutSize
 extern int             acd2_evaluate( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned *cost, int try_no_late_arrival );
 extern int             acd2_decompose( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned char *decomposition );
 extern int             acd_dc_evaluate( word * pTruth, word * pCareSet, unsigned nVars, int lutSize, unsigned *pdelay, unsigned *cost, int try_no_late_arrival );
+extern int             acd_dc_decompose( word * pTruth, word * pCareSet, unsigned nVars, int lutSize, unsigned *pdelay, unsigned char *decomposition );
 
 ////////////////////////////////////////////////////////////////////////
 ///                     FUNCTION DEFINITIONS                         ///

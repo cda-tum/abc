@@ -1,6 +1,6 @@
 /**C++File**************************************************************
 
-  FileName    [ac_decomposition.hpp]
+  FileName    [ac_dc_decomposition.hpp]
 
   SystemName  [ABC: Logic synthesis and verification system.]
 
@@ -8,18 +8,18 @@
 
   Synopsis    [Interface with the FPGA mapping package.]
 
-  Author      [Alessandro Tempia Calvino]
+  Author      [Benjamin Hien]
 
-  Affiliation [EPFL]
+  Affiliation [TUM]
 
-  Date        [Ver. 1.0. Started - November 20, 2023.]
+  Date        [Ver. 1.0. Started - November 20, 2024.]
 
 ***********************************************************************/
 /*!
-  \file ac_decomposition.hpp
-  \brief Ashenhurst-Curtis decomposition
+  \file ac_dc_decomposition.hpp
+  \brief Ashenhurst-Curtis decomposition using don't cares
 
-  \author Alessandro Tempia Calvino
+  \author Benjamin Hien
 */
 
 #ifndef _ACD_DC_H_
@@ -219,6 +219,10 @@ namespace acd
             if ( best_multiplicity == UINT32_MAX )
                 return -1;
 
+            // ToDo: Return a simplified decomposition
+            if ( best_multiplicity == 1 )
+                return -1;
+
             /* compute isets */
             std::vector<STT> isets = compute_isets();
 
@@ -307,7 +311,14 @@ namespace acd
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc5<4u>( tt, cs, loc_tt, loc_cost ); },
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc5<5u>( tt, cs, loc_tt, loc_cost ); } };
 
-           /* std::function<uint32_t( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost )> column_multiplicity_fn[5] = {
+            std::function<uint32_t( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost )> column_multiplicity_fn_dc_manipulate[5] = {
+                    [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc1<1u, true>( tt, cs, loc_tt, loc_cost ); },
+                    [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc2<2u, true>( tt, cs, loc_tt, loc_cost); },
+                    [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc5<3u, true>( tt, cs, loc_tt, loc_cost); },
+                    [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc5<4u, true>( tt, cs, loc_tt, loc_cost ); },
+                    [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity_dc5<5u, true>( tt, cs, loc_tt, loc_cost ); } };
+
+            /*std::function<uint32_t( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost )> column_multiplicity_fn[5] = {
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity<1u>( tt, cs, loc_tt, loc_cost ); },
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity<2u>( tt, cs, loc_tt, loc_cost); },
                     [this]( STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost ) { return column_multiplicity<3u>( tt, cs, loc_tt, loc_cost); },
@@ -334,11 +345,6 @@ namespace acd
                     best_multiplicity = multiplicity;
                     best_cost = multiplicity + additional_cost;
                     best_free_set = i;
-
-                    if ( multiplicity > 2 )
-                    {
-                        const int z = 0;
-                    }
 
                     if ( !ps.use_first && multiplicity > 2 )
                     {
@@ -399,6 +405,14 @@ namespace acd
                 pst->num_luts = best_multiplicity <= 2 ? 2 : best_multiplicity <= 4 ? 3
                                                                                     : best_multiplicity <= 8 ? 4
                                                                                                              : 5;
+            }
+
+            if( ps.use_first )
+            {
+                STT local_best_tt = best_tt;
+                uint64_t test_multiplicity = column_multiplicity_fn_dc_manipulate[best_free_set - 1](best_tt, best_tt_cs, local_best_tt, best_cost );
+                assert( test_multiplicity == best_multiplicity );
+                best_tt = local_best_tt;
             }
 
             return true;
@@ -1013,7 +1027,7 @@ namespace acd
                 }
             }
 
-            if ( multiplicity < loc_cost )
+            if ( multiplicity < loc_cost || ps.use_first )
             {
                 if constexpr ( manipulate )
                 {
@@ -1129,7 +1143,7 @@ namespace acd
             multiplicity = __builtin_popcountl( multiplicity_set );
 
             // If better than current best, optionally manipulate the TT
-            if ( multiplicity < loc_cost )
+            if ( multiplicity < loc_cost || ps.use_first )
             {
                 if constexpr ( manipulate )
                 {
@@ -1343,7 +1357,7 @@ namespace acd
         }
 
         // Compute the minimal column multiplicity with optional TT manipulation for free_set_size = 2
-        template<uint32_t free_set_size, bool manipulate = true>
+        template<uint32_t free_set_size, bool manipulate = false>
         uint32_t column_multiplicity_dc2( const STT &tt, const STT &cs, STT &loc_tt, uint32_t loc_cost )
         {
             static_assert( free_set_size == 2, "Wrong free set size for method used, expected 2" );
@@ -1409,7 +1423,7 @@ namespace acd
             assert( multiplicity <= 16 && "Bug" );
             assert( multiplicity > 0 && "Bug2" );
 
-            if ( multiplicity < loc_cost )
+            if ( multiplicity < loc_cost || ps.use_first )
             {
                 if constexpr ( manipulate )
                 {
@@ -1946,14 +1960,14 @@ namespace acd
             return multiplicity;
         }
 
-        template<uint32_t free_set_size, bool manipulate = true>
+        template<uint32_t free_set_size, bool manipulate = false>
         uint32_t column_multiplicity_dc5(STT const& tt, STT const& cs, STT& loc_tt, uint32_t loc_cost)
         {
-            uint32_t const num_blocks = (num_vars > 6) ? (1u << (num_vars - 6)) : 1;
+            uint32_t const num_blocks = ( num_vars > 6 ) ? ( 1u << ( num_vars - 6 ) ) : 1;
             uint64_t constexpr masks[] = { 0x0, 0x3, 0xF, 0xFF, 0xFFFF, 0xFFFFFFFF };
 
             uint32_t size = 0;
-            uint32_t size2 = 0;
+            uint32_t partial_size = 0;
             uint64_t prev = -1;
 
             std::array<uint32_t, 64> base_set{};
@@ -1964,70 +1978,99 @@ namespace acd
 
             STT new_tt = tt;
 
-            for (auto i = 0u; i < num_blocks; ++i)
+            for ( auto i = 0u; i < num_blocks; ++i )
             {
                 uint64_t cof = tt._bits[i];
                 uint64_t ccs = cs._bits[i];
 
-                for (auto j = 0; j < (64 >> free_set_size); ++j)
+                for ( auto j = 0; j < ( 64 >> free_set_size ); ++j )
                 {
-                    uint32_t fs_fn = static_cast<uint32_t>(cof & masks[free_set_size]);
-                    uint32_t fs_cs = static_cast<uint32_t>(ccs & masks[free_set_size]);
+                    uint32_t fs_fn = static_cast<uint32_t>( cof & masks[free_set_size] );
+                    uint32_t fs_cs = static_cast<uint32_t>( ccs & masks[free_set_size] );
 
-                    if (fs_cs == masks[free_set_size])
+                    if ( fs_cs == masks[free_set_size] )
                     {
-                        if (fs_fn != prev)
+                        if ( fs_fn != prev )
                         {
                             base_set[size++] = fs_fn;
                             prev = fs_fn;
                         }
                     }
-                    else if (fs_cs)
+                    else // if ( fs_cs )
                     {
-                        partial_fn[size2] = fs_fn;
-                        partial_cs[size2] = fs_cs;
-                        block_index[size2] = i;
-                        entry_index[size2] = j;
-                        ++size2;
+                        partial_fn[partial_size] = fs_fn;
+                        partial_cs[partial_size] = fs_cs;
+                        block_index[partial_size] = i;
+                        entry_index[partial_size] = j;
+                        ++partial_size;
                     }
 
-                    cof >>= (1u << free_set_size);
-                    ccs >>= (1u << free_set_size);
+                    cof >>= ( 1u << free_set_size );
+                    ccs >>= ( 1u << free_set_size );
                 }
             }
 
-            std::sort(base_set.begin(), base_set.begin() + size);
-            size = std::unique(base_set.begin(), base_set.begin() + size) - base_set.begin();
+            std::sort( base_set.begin(), base_set.begin() + size );
+            uint32_t unique_size = ( size == 0 ) ? 0 : 1;
 
-            for (uint32_t i = 0; i < size2; ++i)
+            for ( size_t i = 1; i < size; ++i )
+            {
+                if ( base_set[i] != base_set[unique_size - 1] )
+                {
+                    base_set[unique_size++] = base_set[i];
+                }
+            }
+            /*if ( unique_size >= loc_cost )
+            {
+                return UINT32_MAX;
+            }*/
+            // uint32_t unique_size = std::unique( base_set.begin(), base_set.begin() + size ) - base_set.begin();
+
+            for ( uint32_t i = 0; i < partial_size; ++i )
             {
                 bool matched = false;
 
-                for (uint32_t j = 0; j < size; ++j)
+                for ( uint32_t j = 0; j < unique_size; ++j )
                 {
-                    if ((base_set[j] & partial_cs[i]) == (partial_fn[i] & partial_cs[i]))
+                    if ( ( base_set[j] & partial_cs[i] ) == ( partial_fn[i] & partial_cs[i] ) )
                     {
                         matched = true;
 
-                        if constexpr (manipulate)
+                        if constexpr ( manipulate )
                         {
                             uint32_t block = block_index[i];
-                            uint32_t pos = entry_index[i] * (1u << free_set_size);
+                            uint32_t pos = entry_index[i] * ( 1u << free_set_size );
 
-                            uint64_t mask = static_cast<uint64_t>(partial_cs[i]) << pos;
-                            uint64_t value = static_cast<uint64_t>(base_set[j] & partial_cs[i]) << pos;
+                            const auto b1 = base_set[j];
+                            const auto b2 =  partial_fn[i];
+                            const auto b3 = partial_cs[i];
 
-                            new_tt._bits[block] = (new_tt._bits[block] & ~mask) | value;
+                            uint64_t entry_mask = (1ULL << (1u << free_set_size)) - 1;
+                            entry_mask <<= pos;  // shift to position
+                            uint64_t block_test = new_tt._bits[block];
+                            uint64_t mask_test = new_tt._bits[block] & ~entry_mask;
+                            uint64_t entry_test = static_cast<uint64_t>(base_set[j]) << pos;
+                            new_tt._bits[block] = ( new_tt._bits[block] & ~entry_mask ) | (static_cast<uint64_t>(base_set[j]) << pos);
+                            const int u = 0;
                         }
 
                         break;
                     }
                 }
 
-                if (!matched)
+                if ( !matched )
                 {
-                    base_set[size++] = partial_fn[i];
+                    base_set[unique_size++] = partial_fn[i];
+                    /*if ( unique_size >= loc_cost )
+                    {
+                        return UINT32_MAX;
+                    }*/
                 }
+            }
+
+            if constexpr ( manipulate )
+            {
+                loc_tt = new_tt;
             }
 
             for ( size_t i = 0; i < num_blocks; ++i )
@@ -2036,15 +2079,7 @@ namespace acd
                         "Modified truth table is not equivalent under care set!" );
             }
 
-            std::sort(base_set.begin(), base_set.begin() + size);
-            size = std::unique(base_set.begin(), base_set.begin() + size) - base_set.begin();
-
-            if (size < loc_cost)
-            {
-                loc_tt = tt;
-            }
-
-            return size;
+            return unique_size;
         }
 
         uint32_t column_multiplicity2( STT const &tt, uint32_t free_set_size )
@@ -2313,7 +2348,7 @@ namespace acd
                 uint32_t cost = fn( tt, cs, local_best_tt, best_cost );
                 if ( cost < best_cost )
                 {
-                    // local_best_tt = tt;
+                    local_best_tt = tt;
                     local_best_cs = cs;
                     best_cost = cost;
                     for ( uint32_t i = 0; i < num_vars; ++i )
