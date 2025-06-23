@@ -474,6 +474,7 @@ void Gia_ManLogAigStats( Gia_Man_t * p, char * pDumpFile )
     fprintf( pTable, "    \"name\" : \"%s\",\n", p->pName );
     fprintf( pTable, "    \"input\" : %d,\n",    Gia_ManCiNum(p) );
     fprintf( pTable, "    \"output\" : %d,\n",   Gia_ManCoNum(p) );
+    fprintf( pTable, "    \"flop\" : %d,\n",     Gia_ManRegNum(p) );
     fprintf( pTable, "    \"and\" : %d,\n",      Gia_ManAndNum(p) );
     fprintf( pTable, "    \"level\" : %d\n",     Gia_ManLevelNum(p) );
     fprintf( pTable, "}\n" );
@@ -639,6 +640,8 @@ void Gia_ManPrintStats( Gia_Man_t * p, Gps_Par_t * pPars )
     }
     if ( pPars && pPars->fSlacks )
         Gia_ManDfsSlacksPrint( p );
+    if ( Gia_ManHasMapping(p) && pPars->fMapOutStats )
+        Gia_ManPrintOutputLutStats( p );
 }
 
 /**Function*************************************************************
@@ -807,7 +810,7 @@ void Gia_ManPrintNpnClasses( Gia_Man_t * p )
     int i, k, iFan, Class, OtherClasses, OtherClasses2, nTotal, Counter, Counter2;
     unsigned * pTruth; int nLutSize = 0;
     assert( Gia_ManHasMapping(p) );
-    assert(  Gia_ManLutSizeMax( p ) <= 4 );
+    //assert(  Gia_ManLutSizeMax( p ) <= 4 );
     vLeaves   = Vec_IntAlloc( 100 );
     vVisited  = Vec_IntAlloc( 100 );
     vTruth    = Vec_IntAlloc( (1<<16) );

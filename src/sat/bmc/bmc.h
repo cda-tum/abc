@@ -57,15 +57,22 @@ struct Bmc_EsPar_t_
     int        fDynConstr;
     int        fDumpCnf;
     int        fGlucose;
+    int        fCard;
     int        fOrderNodes;
     int        fEnumSols;
     int        fFewerVars;
     int        fQuadrEnc;
     int        fUniqFans;
     int        fLutCascade;
+    int        fLutInFixed;
     int        RuntimeLim;
+    int        nRandFuncs;
+    int        nMintNum;
+    int        Seed;
     int        fVerbose; 
     char *     pTtStr;
+    char *     pSymStr;
+    char *     pGuide;
 };
 
 static inline void Bmc_EsParSetDefault( Bmc_EsPar_t * pPars )
@@ -88,7 +95,7 @@ static inline void Bmc_EsParSetDefault( Bmc_EsPar_t * pPars )
     pPars->fUniqFans   = 0;
     pPars->fLutCascade = 0;
     pPars->RuntimeLim  = 0;
-    pPars->fVerbose    = 1; 
+    pPars->fVerbose    = 0; 
 }
 
 

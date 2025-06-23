@@ -74,6 +74,25 @@ static word s_Truths6Neg[6] = {
     ABC_CONST(0x00000000FFFFFFFF)
 };
 
+static word s_Truth26[2][6] = {
+    {
+        ABC_CONST(0xAAAAAAAAAAAAAAAA),
+        ABC_CONST(0xCCCCCCCCCCCCCCCC),
+        ABC_CONST(0xF0F0F0F0F0F0F0F0),
+        ABC_CONST(0xFF00FF00FF00FF00),
+        ABC_CONST(0xFFFF0000FFFF0000),
+        ABC_CONST(0xFFFFFFFF00000000)
+    },
+    {
+        ABC_CONST(0x5555555555555555),
+        ABC_CONST(0x3333333333333333),
+        ABC_CONST(0x0F0F0F0F0F0F0F0F),
+        ABC_CONST(0x00FF00FF00FF00FF),
+        ABC_CONST(0x0000FFFF0000FFFF),
+        ABC_CONST(0x00000000FFFFFFFF)
+    }
+};
+
 static word s_TruthXors[6] = {
     ABC_CONST(0x0000000000000000),
     ABC_CONST(0x6666666666666666),
@@ -1988,6 +2007,27 @@ static inline word Abc_Tt6RemoveVar( word t, int iVar )
         t = Abc_Tt6SwapAdjacent( t, iVar++ );
     return t;
 }
+// permutes two variables while keeping track of their places
+static inline void Abc_TtPermuteTwo( word * p, int nTTVars, int * Var2Pla, int * Pla2Var, int Var0, int Var1 )
+{
+    int iPlace0 = Var2Pla[Var0];
+    int iPlace1 = Var2Pla[Var1];
+    if ( iPlace0 == iPlace1 )
+        return;
+    Abc_TtSwapVars( p, nTTVars, iPlace0, iPlace1 );
+    Var2Pla[Pla2Var[iPlace0]] = iPlace1;
+    Var2Pla[Pla2Var[iPlace1]] = iPlace0;
+    Pla2Var[iPlace0] ^= Pla2Var[iPlace1];
+    Pla2Var[iPlace1] ^= Pla2Var[iPlace0];
+    Pla2Var[iPlace0] ^= Pla2Var[iPlace1];
+}
+// restores natural variable order
+static inline void Abc_TtRestoreOrder( word * p, int nTTVars, int * Var2Pla, int * Pla2Var, int nPermVars )
+{
+    int i;
+    for ( i = 0; i < nPermVars; i++ )
+        Abc_TtPermuteTwo( p, nTTVars, Var2Pla, Pla2Var, i, Var2Pla[i] );
+}
 
 /**Function*************************************************************
 
@@ -3663,6 +3703,7 @@ static inline void Abc_TtProcessBiDecExperiment()
 //    Dau_DsdPrintFromTruth( &This, Abc_TtBitCount16(resThis) );
 //    Dau_DsdPrintFromTruth( &That, Abc_TtBitCount16(resThat) );
     nVars = nSuppLim;
+    This = s_Truth26[0][0];
 }
 
 /**Function*************************************************************
@@ -3854,6 +3895,23 @@ static inline word * Abc_TtSymFunGenerate( char * pOnes, int nVars )
     return pTruth;
 }
 
+/**Function*************************************************************
+
+  Synopsis    [Fix big-endian when dealilng with 5-var truth tables.]
+
+  Description []
+               
+  SideEffects []
+
+  SeeAlso     []
+
+***********************************************************************/
+static inline void Abc_TtFlipVar5( word * p, int nVars )
+{
+    int Test = 1;
+    if ( *((char *)&Test) == 0 && nVars > 5 )
+        Abc_TtFlip( p, Abc_TtWordNum(nVars), 5 );
+}
 
 ABC_NAMESPACE_HEADER_END
 
