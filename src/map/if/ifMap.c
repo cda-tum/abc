@@ -234,9 +234,13 @@ void If_ObjPerformMappingAnd( If_Man_t * p, If_Obj_t * pObj, int Mode, int fPrep
     }
 
     // generate cuts
+    // printf("Mapping at node %i\n", pObj->Id);
+    int cut_it = 0;
     If_ObjForEachCut( pObj->pFanin0, pCut0, i )
     If_ObjForEachCut( pObj->pFanin1, pCut1, k )
     {
+        //printf("fanin0: %i\n", pObj->pFanin0->Id);
+        //printf("fanin1: %i\n", pObj->pFanin1->Id);
         // get the next free cut
         assert( pCutSet->nCuts <= pCutSet->nCutsMax );
         pCut = pCutSet->ppCuts[pCutSet->nCuts];
@@ -268,6 +272,14 @@ void If_ObjPerformMappingAnd( If_Man_t * p, If_Obj_t * pObj, int Mode, int fPrep
             if ( !If_CutMergeOrdered( p, pCut0, pCut1, pCut ) )
                 continue;
         }
+        // int z;
+        /*If_Obj_t * IfLeaf;
+        printf("Number of visited cuts %i\n", cut_it++);
+        If_CutForEachLeaf(p, pCut, IfLeaf, z)
+        {
+            pCut->pLeaves;
+            printf("Leaf ID: %i\n", IfLeaf->Id);
+        }*/
         if ( p->pPars->fUserLutDec && !fFirst && pCut->nLeaves > p->pPars->nLutDecSize )
             continue;
         if ( pObj->fSpec && pCut->nLeaves == (unsigned)p->pPars->nLutSize )
@@ -482,6 +494,13 @@ void If_ObjPerformMappingAnd( If_Man_t * p, If_Obj_t * pObj, int Mode, int fPrep
         If_CutCopy( p, If_ObjCutBest(pObj), pCutSet->ppCuts[0] );
         if ( p->pPars->fUserRecLib || p->pPars->fUserSesLib )
             assert(If_ObjCutBest(pObj)->Cost < IF_COST_MAX && If_ObjCutBest(pObj)->Delay < ABC_INFINITY);
+        /*int z;
+        If_Obj_t * IfLeaf;
+        printf("Best cut got updated\n");
+        If_CutForEachLeaf(p, If_ObjCutBest(pObj), IfLeaf, z)
+        {
+            printf("Best Cut Leaf ID: %i\n", IfLeaf->Id);
+        }*/
     }
     // add the trivial cut to the set
     if ( !pObj->fSkipCut && If_ObjCutBest(pObj)->nLeaves > 1 )

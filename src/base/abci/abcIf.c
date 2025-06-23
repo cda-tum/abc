@@ -426,6 +426,54 @@ Hop_Obj_t * Abc_NodeBuildFromMini( Hop_Man_t * pMan, If_Man_t * p, If_Cut_t * pC
     return Abc_NodeBuildFromMiniInt( pMan, p->vArray, If_CutLeaveNum(pCut) );
 }
 
+void print_decomposition_abc( const unsigned char* decompArray )
+{
+    const unsigned char* pArray = decompArray;
+    unsigned int total_bytes = *pArray++;
+    unsigned int num_luts = *pArray++;
+
+    printf("Decomposition array (%u bytes):\n", total_bytes);
+    printf("Number of LUTs: %u\n", num_luts);
+
+    for ( unsigned int i = 0; i < num_luts; ++i )
+    {
+        unsigned int num_fanins = *pArray++;
+        printf("LUT %u: %u fanins\n", i, num_fanins);
+
+        printf("  Support: ");
+        for ( unsigned int j = 0; j < num_fanins; ++j )
+        {
+            printf("%u ", (unsigned int)*pArray++);
+        }
+        printf("\n");
+
+        // Compute number of bytes for truth table
+        unsigned int tt_num_bytes = ( num_fanins <= 3 ) ? 1 : ( 1 << ( num_fanins - 3 ) );
+        if ( tt_num_bytes > 8 )
+            tt_num_bytes = 8;
+
+        printf("  TT (hex): 0x");
+        for ( unsigned int j = 0; j < tt_num_bytes; ++j )
+        {
+            printf("%02X", *pArray++);
+        }
+        printf("\n");
+
+        // Optional: also print bits for easier debugging
+        if ( num_fanins <= 6 )
+        {
+            unsigned char tt_byte = *(pArray - tt_num_bytes); // first byte
+            unsigned int num_bits = 1 << num_fanins;
+            printf("  TT (bits): ");
+            for ( int bit = 0; bit < num_bits; ++bit )
+            {
+                printf("%d", (tt_byte >> bit) & 1);
+            }
+            printf("\n");
+        }
+    }
+}
+
 /**Function*************************************************************
    Synopsis    [Implements decomposed LUT-structure of the cut.]
    Description []
@@ -464,7 +512,30 @@ void Abc_DecRecordToHop( Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Cut_t * pCut
     if ( pIfMan->pPars->fUserLutDec )
     {
         // acd pointer
-        val = acd_decompose( pTruth, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delayProfile), decompArray );
+        if ( pIfMan->pPars->fUserLutDecDc )
+        {
+            word * pCareSet = If_CutCsW(pIfMan, pCutBest);
+            const int num_blocks = ( pCutBest->nLeaves <= 6 ) ? 1 : ( 1 << ( pCutBest->nLeaves - 6 ) );
+            int allOnes = 1;
+            for ( int i = 0; i < num_blocks; ++i )
+            {
+                if ( pCareSet[i] != ~(word)0 )
+                {
+                    allOnes = 0;
+                    break;
+                }
+            }
+
+            if ( !allOnes )
+                printf( "Dont cares found.\n" );
+            else
+                printf( "Eval wo DC.\n" );
+
+            val = acd_dc_decompose( pTruth, pCareSet, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delayProfile), decompArray );
+        }
+        else
+            val = acd_decompose( pTruth, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delayProfile), decompArray );
+
     }
     else if ( pIfMan->pPars->fUserLut2D )
     {

@@ -797,11 +797,17 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
         int LutSize = 6;
 
         int n = p->nVars;  // Number of bits in total
-        int f = 2;  // Number of late arriving variables
+        int f = 1;  // Number of late arriving variables
         unsigned delay = ( 1 << f ) - 1; // Initial bit pattern with f bits set
 
         abctime total_time_evaluate = 0;
         abctime total_time_dc_evaluate = 0;
+
+        word pAllOne[4];
+        pAllOne[0] = 0xAAAAAAAAAAAAAAAA;
+        pAllOne[1] = 0xAAAAAAAAAAAAAAAA;
+        pAllOne[2] = 0xAAAAAAAAAAAAAAAA;
+        pAllOne[3] = 0xAAAAAAAAAAAAAAAA;
 
         while ( 1 )
         {
@@ -811,7 +817,7 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
                 printf( "%d", ( delay >> j ) & 1 );
             }
             printf( "\n" );
-            for ( i = 0; i < p->nFuncs - 1; i += 2 )
+            /*for ( i = 0; i < p->nFuncs - 1; i += 2 )
             {
                 unsigned cost1 = 1;
                 unsigned delay1 = delay;
@@ -840,24 +846,19 @@ void Abc_TruthDecPerform( Abc_TtStore_t * p, int DecType, int fVerbose )
                     continue;
                 }
                 nNodes += cost1;
-            }
+            }*/
             for ( i = 0; i < p->nFuncs - 1; i += 2 )
             {
                 unsigned cost2 = 1;
                 unsigned delay2 = delay;
                 abctime start_evaluate = Abc_Clock();
-                word pAllOne[4];
-                pAllOne[0] = 0xAAAAAAAAAAAAAAAA;
-                pAllOne[1] = 0xAAAAAAAAAAAAAAAA;
-                pAllOne[2] = 0xAAAAAAAAAAAAAAAA;
-                pAllOne[3] = 0xAAAAAAAAAAAAAAAA;
 
-                int val2 = acd_dc_evaluate( p->pFuncs[i], p->pFuncs[i + 1], p->nVars, LutSize, &delay2, &cost2, !use_late_arrival );
+                int val2 = acd_dc_evaluate( pAllOne, pAllOne, p->nVars, LutSize, &delay2, &cost2, !use_late_arrival );
                 if ( val2 != -1 )
                 {
                     unsigned char decompArray[92];
                     delay2 = delay;
-                    int val_dec = acd_dc_decompose( p->pFuncs[i], p->pFuncs[i + 1], p->nVars, LutSize, &delay2, decompArray );
+                    int val_dec = acd_dc_decompose( pAllOne, pAllOne, p->nVars, LutSize, &delay2, decompArray );
                 }
                 abctime end_evaluate = Abc_Clock();
                 total_time_dc_evaluate += ( end_evaluate - start_evaluate );

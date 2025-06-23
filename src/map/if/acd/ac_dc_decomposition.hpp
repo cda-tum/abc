@@ -219,9 +219,11 @@ namespace acd
             if ( best_multiplicity == UINT32_MAX )
                 return -1;
 
-            // ToDo: Return a simplified decomposition
             if ( best_multiplicity == 1 )
-                return -1;
+            {
+                printf("Best multiplicity is 1\n");
+                return 0;
+            }
 
             /* compute isets */
             std::vector<STT> isets = compute_isets();
@@ -411,7 +413,10 @@ namespace acd
             {
                 STT local_best_tt = best_tt;
                 uint64_t test_multiplicity = column_multiplicity_fn_dc_manipulate[best_free_set - 1](best_tt, best_tt_cs, local_best_tt, best_cost );
-                assert( test_multiplicity == best_multiplicity );
+                if ( test_multiplicity != best_multiplicity)
+                {
+                    std::cerr << "Error: Multiplicity differs" << std::endl;
+                }
                 best_tt = local_best_tt;
             }
 
@@ -1142,84 +1147,77 @@ namespace acd
             multiplicity_set &= 0xF;
             multiplicity = __builtin_popcountl( multiplicity_set );
 
-            // If better than current best, optionally manipulate the TT
-            if ( multiplicity < loc_cost || ps.use_first )
+            if constexpr ( manipulate )
             {
-                if constexpr ( manipulate )
+                assert(multiplicity == best_multiplicity && "Multiplicity calculation wrong");
+                STT new_tt = tt;
+
+                // Assign unassigned partials to selected base values
+                uint64_t default_dc_val = 0xF;
+                uint64_t temp_set = multiplicity_set;
+
+                while ( temp_set )
                 {
-                    STT new_tt = tt;
+                    uint32_t pos = __builtin_ctzl( temp_set );
+                    temp_set &= temp_set - 1;
 
-                    // Assign unassigned partials to selected base values
-                    uint64_t default_dc_val = 0xF;
-                    uint64_t temp_set = multiplicity_set;
+                    encode_dc1( mapping, coverage_masks[pos], pos );
 
-                    while ( temp_set )
+                    if ( default_dc_val == 0xF )
                     {
-                        uint32_t pos = __builtin_ctzl( temp_set );
-                        temp_set &= temp_set - 1;
-
-                        encode_dc1( mapping, coverage_masks[pos], pos );
-
-                        if ( default_dc_val == 0xF )
-                        {
-                            default_dc_val = pos;
-                        }
+                        default_dc_val = pos;
                     }
+                }
 
-                    for ( uint32_t i = 0; i < num_blocks; ++i )
+                for ( uint32_t i = 0; i < num_blocks; ++i )
+                {
+                    uint64_t old_tt = tt._bits[i];
+                    uint64_t care = cs._bits[i];
+                    uint64_t & new_tt_block = new_tt._bits[i];
+
+                    for ( uint32_t j = 0; j < ( 64 >> free_set_size ); ++j )
                     {
-                        uint64_t old_tt = tt._bits[i];
-                        uint64_t care = cs._bits[i];
-                        uint64_t &new_tt_block = new_tt._bits[i];
+                        uint64_t cs_bits = care & 0x3;
+                        uint64_t tt_bits = old_tt & 0x3;
 
-                        for ( uint32_t j = 0; j < ( 64 >> free_set_size ); ++j )
+                        uint64_t new_val = 0;
+
+                        if ( cs_bits != 0 )
                         {
-                            uint64_t cs_bits = care & 0x3;
-                            uint64_t tt_bits = old_tt & 0x3;
-
-                            uint64_t new_val = 0;
-
-                            if ( cs_bits != 0 )
+                            if ( cs_bits != 3 )
                             {
-                                if ( cs_bits != 3 )
-                                {
-                                    uint32_t idx = ( cs_bits << 1 ) + __builtin_popcountl( cs_bits & tt_bits ) - 2;
-                                    new_val = mapping[idx] & 0x3;
-                                }
-                                else
-                                {
-                                    new_val = tt_bits;
-                                }
+                                uint32_t idx = ( cs_bits << 1 ) + __builtin_popcountl( cs_bits & tt_bits ) - 2;
+                                new_val = mapping[idx] & 0x3;
                             }
                             else
                             {
-                                new_val = default_dc_val;
+                                new_val = tt_bits;
                             }
-
-                            uint64_t shift = j * 2;
-                            new_tt_block = ( new_tt_block & ~( 0x3ULL << shift ) ) | ( new_val << shift );
-
-                            old_tt >>= 2;
-                            care >>= 2;
+                        }
+                        else
+                        {
+                            new_val = default_dc_val;
                         }
 
-                        // Ensure new TT agrees with original where care set is 1
-                        assert( ( ( new_tt_block ^ tt._bits[i] ) & cs._bits[i] ) == 0 );
+                        uint64_t shift = j * 2;
+                        new_tt_block = ( new_tt_block & ~( 0x3ULL << shift ) ) | ( new_val << shift );
+
+                        old_tt >>= 2;
+                        care >>= 2;
                     }
 
-                    // Sanity check: recompute multiplicity
-                    /*uint32_t multiplicity2 = column_multiplicity<1>( new_tt, cs, loc_tt, loc_cost );
-                    if ( multiplicity2 != multiplicity )
-                    {
-                        std::cerr << "Mismatch in expected multiplicity after manipulation.\n";
-                    }*/
+                    // Ensure new TT agrees with original where care set is 1
+                    assert( ( ( new_tt_block ^ tt._bits[i] ) & cs._bits[i] ) == 0 );
+                }
 
-                    loc_tt = new_tt;
-                }
-                else
+                // Sanity check: recompute multiplicity
+                /*uint32_t multiplicity2 = column_multiplicity<1>( new_tt, cs, loc_tt, loc_cost );
+                if ( multiplicity2 != multiplicity )
                 {
-                    loc_tt = tt;
-                }
+                    std::cerr << "Mismatch in expected multiplicity after manipulation.\n";
+                }*/
+
+                loc_tt = new_tt;
             }
 
             return multiplicity;
@@ -1423,76 +1421,70 @@ namespace acd
             assert( multiplicity <= 16 && "Bug" );
             assert( multiplicity > 0 && "Bug2" );
 
-            if ( multiplicity < loc_cost || ps.use_first )
+            if constexpr ( manipulate )
             {
-                if constexpr ( manipulate )
+                assert(multiplicity == best_multiplicity && "Multiplicity calculation wrong");
+                STT new_tt = tt;
+                uint64_t default_value = 0xFF;
+
+                uint64_t tmp_set = selected_set;
+                while ( tmp_set )
                 {
-                    STT new_tt = tt;
-                    uint64_t default_value = 0xFF;
+                    uint32_t index = __builtin_ctzll( tmp_set );
+                    tmp_set &= tmp_set - 1;
+                    encode_dc2( mapping, coverage_masks[index], index );
+                    if ( default_value == 0xFF ) default_value = index;
+                }
 
-                    uint64_t tmp_set = selected_set;
-                    while ( tmp_set )
+                for ( uint32_t i = 0; i < num_blocks; ++i )
+                {
+                    uint64_t tt_block = tt._bits[i];
+                    uint64_t cs_block = cs._bits[i];
+                    uint64_t &new_block = new_tt._bits[i];
+
+                    for ( uint32_t j = 0; j < ( 64 >> free_set_size ); ++j )
                     {
-                        uint32_t index = __builtin_ctzll( tmp_set );
-                        tmp_set &= tmp_set - 1;
-                        encode_dc2( mapping, coverage_masks[index], index );
-                        if ( default_value == 0xFF ) default_value = index;
-                    }
+                        uint64_t care = cs_block & 0xF;
+                        uint64_t value = tt_block & 0xF;
 
-                    for ( uint32_t i = 0; i < num_blocks; ++i )
-                    {
-                        uint64_t tt_block = tt._bits[i];
-                        uint64_t cs_block = cs._bits[i];
-                        uint64_t &new_block = new_tt._bits[i];
-
-                        for ( uint32_t j = 0; j < ( 64 >> free_set_size ); ++j )
+                        if ( care )
                         {
-                            uint64_t care = cs_block & 0xF;
-                            uint64_t value = tt_block & 0xF;
-
-                            if ( care )
+                            if ( care != 0xF )
                             {
-                                if ( care != 0xF )
-                                {
-                                    uint32_t count = __builtin_popcountll( care );
-                                    uint32_t idx = extract_relevant_bits( care, value, count );
-                                    uint32_t map_idx = 0;
+                                uint32_t count = __builtin_popcountll( care );
+                                uint32_t idx = extract_relevant_bits( care, value, count );
+                                uint32_t map_idx = 0;
 
-                                    if ( count == 1 )
-                                        map_idx = encode[care] * 2u + idx;
-                                    else if ( count == 2 )
-                                        map_idx = 8u + ( encode[care] - 4u ) * 4u + idx;
-                                    else if ( count == 3 )
-                                        map_idx = 32u + ( encode[care] - 10u ) * 8u + idx;
+                                if ( count == 1 )
+                                    map_idx = encode[care] * 2u + idx;
+                                else if ( count == 2 )
+                                    map_idx = 8u + ( encode[care] - 4u ) * 4u + idx;
+                                else if ( count == 3 )
+                                    map_idx = 32u + ( encode[care] - 10u ) * 8u + idx;
 
-                                    new_block = ( new_block & ~( UINT64_C( 0xF ) << ( j * 4 ) ) ) |
-                                                ( mapping[map_idx] << ( j * 4 ) );
-                                }
-                            }
-                            else
-                            {
                                 new_block = ( new_block & ~( UINT64_C( 0xF ) << ( j * 4 ) ) ) |
-                                            ( default_value << ( j * 4 ) );
+                                            ( mapping[map_idx] << ( j * 4 ) );
                             }
-
-                            tt_block >>= 4;
-                            cs_block >>= 4;
                         }
-                        // Ensure new TT agrees with original where care set is 1
-                        assert( ( ( new_block ^ tt._bits[i] ) & cs._bits[i] ) == 0 );
-                    }
+                        else
+                        {
+                            new_block = ( new_block & ~( UINT64_C( 0xF ) << ( j * 4 ) ) ) |
+                                        ( default_value << ( j * 4 ) );
+                        }
 
-                    /*uint32_t multiplicity_check = column_multiplicity<2>( new_tt, cs, loc_tt, loc_cost );
-                    if ( multiplicity_check != multiplicity )
-                    {
-                        std::cerr << "Wrong truth table substitution" << std::endl;
-                    }*/
-                    loc_tt = new_tt;
+                        tt_block >>= 4;
+                        cs_block >>= 4;
+                    }
+                    // Ensure new TT agrees with original where care set is 1
+                    assert( ( ( new_block ^ tt._bits[i] ) & cs._bits[i] ) == 0 );
                 }
-                else
+
+                /*uint32_t multiplicity_check = column_multiplicity<2>( new_tt, cs, loc_tt, loc_cost );
+                if ( multiplicity_check != multiplicity )
                 {
-                    loc_tt = tt;
-                }
+                    std::cerr << "Wrong truth table substitution" << std::endl;
+                }*/
+                loc_tt = new_tt;
             }
 
             return multiplicity;
@@ -2047,11 +2039,7 @@ namespace acd
 
                             uint64_t entry_mask = (1ULL << (1u << free_set_size)) - 1;
                             entry_mask <<= pos;  // shift to position
-                            uint64_t block_test = new_tt._bits[block];
-                            uint64_t mask_test = new_tt._bits[block] & ~entry_mask;
-                            uint64_t entry_test = static_cast<uint64_t>(base_set[j]) << pos;
                             new_tt._bits[block] = ( new_tt._bits[block] & ~entry_mask ) | (static_cast<uint64_t>(base_set[j]) << pos);
-                            const int u = 0;
                         }
 
                         break;
@@ -2496,6 +2484,31 @@ namespace acd
         void generate_decomposition()
         {
             dec_result.clear();
+
+            if ( best_multiplicity == 1 )
+            {
+                ac_decomposition_result dec;
+
+                // Determine free set support (original variable indices)
+                for ( uint32_t i = 0; i < best_free_set; ++i )
+                {
+                    dec.support.push_back( permutations[i] );
+                }
+
+                // Shrink the TT to only the free set
+                dec.tt = kitty::shrink_to( best_tt, best_free_set );
+
+                dec_result.push_back( dec );
+
+                // Set stats
+                if ( pst )
+                {
+                    pst->num_luts = 1;
+                    pst->num_edges = dec.support.size();
+                }
+
+                return; // done
+            }
 
             uint32_t num_edges = 0;
             for ( uint32_t i = 0; i < best_bound_sets.size(); ++i )

@@ -214,6 +214,7 @@ int acd_dc_decompose( word * pTruth, word * pCareSet, unsigned nVars, int lutSiz
 
     ac_dc_decomposition_impl acd( nVars, ps, &st );
     acd.run( pTruth, pCareSet, *pdelay );
+    int eq = acd.check_truth_table_equivalence_test(pTruth, pCareSet);
     int val = acd.compute_decomposition();
 
     if ( val < 0 )
@@ -224,6 +225,7 @@ int acd_dc_decompose( word * pTruth, word * pCareSet, unsigned nVars, int lutSiz
 
     *pdelay = acd.get_profile();
     acd.get_decomposition( decomposition );
+    // print_decomposition_abc(decomposition);
     return 0;
 }
 

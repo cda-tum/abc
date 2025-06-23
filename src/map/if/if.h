@@ -220,6 +220,7 @@ struct If_Man_t_
     int                nCutsMerged;   // the total number of cuts merged
     unsigned *         puTemp[4];     // used for the truth table computation
     word *             puTempW;       // used for the truth table computation
+    word *             puTemp2W;      // used for the truth table computation
     int                SortMode;      // one of the three sorting modes
     int                fNextRound;    // set to 1 after the first round
     int                nChoices;      // the number of choice nodes
@@ -307,6 +308,7 @@ struct If_Cut_t_
     float              Power;         // the power flow
     float              Delay;         // delay of the cut
     int                iCutFunc;      // TT ID of the cut
+    int                iCutCs;        // CS ID of the cut
     int                uMaskFunc;     // polarity bitmask
     unsigned           uSign;         // cut signature
     unsigned           Cost    : 12;  // the user's cost of the cut (related to IF_COST_MAX)
@@ -348,7 +350,8 @@ struct If_Obj_t_
     int                nRefs;         // the number of references
     int                nVisits;       // the number of visits to this node
     int                nVisitsCopy;   // the number of visits to this node
-    If_Obj_t *         pFanin0;       // the first fanin 
+    int                nFanouts;      // the number of Fanouts
+    If_Obj_t *         pFanin0;       // the first fanin
     If_Obj_t *         pFanin1;       // the second fanin
     If_Obj_t *         pEquiv;        // the choice node
     float              EstRefs;       // estimated reference counter
@@ -450,6 +453,8 @@ static inline int        If_CutTruthIsCompl( If_Cut_t * pCut )               { a
 static inline word *     If_CutTruthWR( If_Man_t * p, If_Cut_t * pCut )      { return p->vTtMem[pCut->nLeaves] ? Vec_MemReadEntry(p->vTtMem[pCut->nLeaves], Abc_Lit2Var(pCut->iCutFunc)) : NULL;  }
 static inline unsigned * If_CutTruthUR( If_Man_t * p, If_Cut_t * pCut)       { return (unsigned *)If_CutTruthWR(p, pCut);                        }
 static inline word *     If_CutTruthW( If_Man_t * p, If_Cut_t * pCut )       { assert( pCut->iCutFunc >= 0 ); Abc_TtCopy( p->puTempW, If_CutTruthWR(p, pCut), p->nTruth6Words[pCut->nLeaves], If_CutTruthIsCompl(pCut) ); return p->puTempW;  }
+static inline word *     If_CutCsWR( If_Man_t * p, If_Cut_t * pCut )         { return p->vTtMem[pCut->nLeaves] ? Vec_MemReadEntry(p->vTtMem[pCut->nLeaves], Abc_Lit2Var(pCut->iCutCs)) : NULL;  }
+static inline word *     If_CutCsW( If_Man_t * p, If_Cut_t * pCut )          { assert( pCut->iCutCs >= 0 ); Abc_TtCopy( p->puTemp2W, If_CutCsWR(p, pCut), p->nTruth6Words[pCut->nLeaves], 0 ); return p->puTemp2W;  }
 static inline unsigned * If_CutTruth( If_Man_t * p, If_Cut_t * pCut )        { return (unsigned *)If_CutTruthW(p, pCut);                         }
 
 static inline int        If_CutDsdLit( If_Man_t * p, If_Cut_t * pCut )       { return Abc_Lit2LitL( Vec_IntArray(p->vTtDsds[pCut->nLeaves]), If_CutTruthLit(pCut) );               }
@@ -713,6 +718,8 @@ extern int             acd_evaluate( word * pTruth, unsigned nVars, int lutSize,
 extern int             acd_decompose( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned char *decomposition );
 extern int             acd2_evaluate( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned *cost, int try_no_late_arrival );
 extern int             acd2_decompose( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned char *decomposition );
+extern int             acd_dc_evaluate( word * pTruth, word * pCareSet, unsigned nVars, int lutSize, unsigned *pdelay, unsigned *cost, int try_no_late_arrival );
+extern int             acd_dc_decompose( word * pTruth, word * pCareSet, unsigned nVars, int lutSize, unsigned *pdelay, unsigned char *decomposition );
 
 ABC_NAMESPACE_HEADER_END
 

@@ -104,6 +104,7 @@ If_Man_t * If_ManStart( If_Par_t * pPars )
     p->puTemp[2] = p->pPars->fTruth? p->puTemp[1] + p->nTruth6Words[p->pPars->nLutSize]*2 : NULL;
     p->puTemp[3] = p->pPars->fTruth? p->puTemp[2] + p->nTruth6Words[p->pPars->nLutSize]*2 : NULL;
     p->puTempW   = p->pPars->fTruth? ABC_ALLOC( word, p->nTruth6Words[p->pPars->nLutSize] ) : NULL;
+    p->puTemp2W   = p->pPars->fTruth? ABC_ALLOC( word, p->nTruth6Words[p->pPars->nLutSize] ) : NULL;
     if ( pPars->fUseDsd )
     {
         for ( v = 6; v <= Abc_MaxInt(6,p->pPars->nLutSize); v++ )
@@ -300,6 +301,7 @@ void If_ManStop( If_Man_t * p )
     ABC_FREE( p->pMemAnd );
     ABC_FREE( p->puTemp[0] );
     ABC_FREE( p->puTempW );
+    ABC_FREE( p->puTemp2W );
     // free pars memory
     ABC_FREE( p->pPars->pTimesArr );
     ABC_FREE( p->pPars->pTimesReq );
@@ -405,6 +407,8 @@ If_Obj_t * If_ManCreateAnd( If_Man_t * p, If_Obj_t * pFan0, If_Obj_t * pFan1 )
     pObj->fCompl1 = If_IsComplement(pFan1); pFan1 = If_Regular(pFan1);
     pObj->pFanin0 = pFan0; pFan0->nRefs++; pFan0->nVisits++; pFan0->nVisitsCopy++;
     pObj->pFanin1 = pFan1; pFan1->nRefs++; pFan1->nVisits++; pFan1->nVisitsCopy++;
+    pObj->pFanin0->nFanouts++;
+    pObj->pFanin1->nFanouts++;
     pObj->fPhase  = (pObj->fCompl0 ^ pFan0->fPhase) & (pObj->fCompl1 ^ pFan1->fPhase);
     pObj->Level   = 1 + IF_MAX( pFan0->Level, pFan1->Level );
     if ( p->nLevelMax < (int)pObj->Level )
