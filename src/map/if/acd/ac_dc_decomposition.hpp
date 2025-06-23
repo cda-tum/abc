@@ -309,7 +309,7 @@ namespace acd
                 best_cs._bits[i] = pcs[i];
             }
 
-            // local_extend_to( best_tt, num_vars );
+            // local_extend_to( best_cs, num_vars );
         }
 
 

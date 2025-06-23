@@ -182,7 +182,7 @@ int acd_dc_evaluate( word * pTruth, word * pCareSet, unsigned nVars, int lutSize
     ps.lut_size = lutSize;
     ps.use_first = false;
     ps.try_no_late_arrival = static_cast<bool>( try_no_late_arrival );
-    ps.max_free_set_vars = 5;
+    // ps.max_free_set_vars = 5;
     ac_decomposition_stats st;
 
     ac_dc_decomposition_impl acd( nVars, ps, &st );
