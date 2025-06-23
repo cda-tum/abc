@@ -463,7 +463,13 @@ void Abc_DecRecordToHop( Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Cut_t * pCut
     int val;
     if ( pIfMan->pPars->fUserLutDec )
     {
-        val = acd_decompose( pTruth, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delayProfile), decompArray );
+        if ( pIfMan->pPars->fUserLutDecDc )
+        {
+            word * pCareSet = If_CutCsW(pIfMan, pCutBest);
+            val = acd_dc_decompose( pTruth, pCareSet, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delayProfile), decompArray );
+        }
+        else
+            val = acd_decompose( pTruth, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delayProfile), decompArray );
     }
     else if ( pIfMan->pPars->fUserLut2D )
     {
