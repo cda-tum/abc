@@ -490,7 +490,63 @@ int If_LutDecEval( If_Man_t * p, If_Cut_t * pCut, If_Obj_t * pObj, int optDelay,
 
     /* returns the delay of the decomposition */
     word *pTruth = If_CutTruthW( p, pCut );
-    int val = acd_evaluate( pTruth, pCut->nLeaves, LutSize, &uLeafMask, &cost, !use_late_arrival );
+    int val;
+    if ( p->pPars->fUserLutDecDc )
+    {
+        // extract the care set
+        int nWords = ( pCut->nLeaves <= 6 ) ? 1 : ( 1 << ( pCut->nLeaves - 6 ) );
+        word* pCareSet = ABC_ALLOC( word, nWords );
+        memset( pCareSet, 0, sizeof(word) * nWords );
+        // If_ExtractDcMin(p, pCut, pCareSet);
+        // test
+        for ( int j = 0; j < nWords; ++j )
+            pCareSet[j] = ~(word)0;
+
+        // save Care set for cut
+        int csId = Vec_MemHashInsert(p->vTtMem[pCut->nLeaves], pCareSet);
+        pCut->iCutCare = Abc_Var2Lit(csId, 0);
+
+        int allOnes = 1;
+        for ( int j = 0; j < nWords; ++j )
+        {
+            if ( pCareSet[j] != ~(word)0 )
+            {
+                allOnes = 0;
+                break;
+            }
+        }
+
+        if ( !allOnes )
+        {
+            printf("CareSet: \n");
+            for ( int j = 0; j < nWords; ++j )
+            {
+                printf("Block %i: %lu\n", j, pCareSet[j]);
+            }
+            printf( "Dont cares evaluated.\n" );
+        }
+
+        // for debugging
+        unsigned costdc = cost;
+        unsigned uLDC = uLeafMask;
+
+        val = acd_dc_evaluate( pTruth, pCareSet, pCut->nLeaves, LutSize, &uLeafMask, &cost, !use_late_arrival );
+
+        // for debugging
+        int val2 = acd_evaluate( pTruth, pCut->nLeaves, LutSize, &uLDC, &costdc, !use_late_arrival );
+        if ( val2 != val )
+        {
+            printf("This should not happen\n");
+            printf("val: %i \n", val);
+            printf("val2: %i \n", val2);
+        }
+
+        ABC_FREE( pCareSet );
+    }
+    else
+    {
+        val = acd_evaluate( pTruth, pCut->nLeaves, LutSize, &uLeafMask, &cost, !use_late_arrival );
+    }
 
     /* not feasible decomposition */
     pCut->decDelay = uLeafMask;
