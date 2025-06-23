@@ -148,6 +148,7 @@ struct If_Par_t_
     int                fDoAverage;    // optimize average rather than maximum level
     int                fHashMapping;  // perform AIG hashing after mapping
     int                fUserLutDec;   // perform Boolean decomposition during mapping
+    int                fUserLutDecDc; // perform Boolean decomposition during mapping
     int                fUserLut2D;    // perform Boolean decomposition during mapping
     int                fVerbose;      // the verbosity flag
     int                fVerboseTrace; // the verbosity flag
