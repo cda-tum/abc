@@ -549,6 +549,22 @@ namespace acd
             return multiplicity;
         }
 
+        static inline uint32_t extract_relevant_bits( uint64_t ccs_mask, uint64_t cof_mask, uint32_t pop )
+        {
+            uint32_t compacted_value = 0;
+            uint32_t bit_position = 0;
+
+            for ( uint32_t i = 0; i < pop; ++i )
+            {  // Loop runs at most 4 times
+                uint32_t lowest_bit = __builtin_ctzll( ccs_mask );  // Find rightmost set bit in ccs_mask
+                compacted_value |= ( ( cof_mask >> lowest_bit ) & 1 ) << bit_position; // Extract and shift
+                ccs_mask ^= ( UINT64_C( 1 ) << lowest_bit ); // Remove lowest set bit efficiently
+                ++bit_position;
+            }
+
+            return compacted_value;
+        }
+
         // Helper: Map uncovered DC terms to a selected representative
         static void encode_dc2( uint64_t *mapping, uint64_t mask, uint64_t cof_masked )
         {
@@ -893,7 +909,7 @@ namespace acd
             if ( free_set_size == offset )
             {
                 best_cost = fn( tt, cs, local_best_tt, best_cost );
-                return std::make_tuple( tt, local_best_cs, permutations, best_cost );
+                return std::make_tuple( tt, cs, permutations, best_cost );
             }
 
             /* works up to 16 input truth tables */
