@@ -28,6 +28,57 @@ read_lib <library>.lib
 map -d [-D <delay_target_ps>]
 ```
 
+## Scope: this is dynamic power only, not total power
+
+**Important for interpreting every number below.** The value driving
+`map -d`'s cost function — `dPower_dyn` — comes from
+`Abc_SclComputeAveragePower()` in `src/map/scl/sclLibUtil.c`:
+
+```c
+static float Abc_SclComputeAveragePower( SC_Cell ** p )
+{
+    float a = Abc_SclComputeAverageNetSwitchingPower( p );
+    float b = Abc_SclComputeAverageCellInternalPower( p );
+    ...
+    return a + b;
+}
+```
+
+`a` is net switching power (output pin `rise_power`/`fall_power`
+tables), `b` is cell internal power (input pin `internal_power`
+tables) — **both dynamic components. Leakage never enters this
+function.**
+
+Leakage isn't unavailable — it's parsed from the Liberty file fine
+(`Scl_LibertyReadCellLeakage` reads `cell_leakage_power`, stored as
+`pCell->leakage` on every cell) — it's just wired to an unrelated,
+pre-existing ABC feature instead: `Abc_SclConvertLeakageIntoArea(p, A,
+B)` does `area = A·area + B·leakage`, a leakage-weighted *area*
+metric for sizing, used nowhere in the `map -d` path. Leakage sits in
+memory, fully characterized, and the power-aware mapper never looks at
+it.
+
+**Consequence:** every `DynPower`/percentage number in this document
+is a dynamic-power-only reduction, not total power. That's a real,
+legitimate, correctly-computed result — dynamic power is expected to
+matter proportionally more as cryogenic leakage collapses, so this
+isn't the wrong thing to optimize for a cryo study. But it means:
+
+- These numbers can't be quoted as "power" reduction in a paper without
+  qualifying "dynamic."
+- The 10K-vs-300K finding below (300K shows a *larger* percentage
+  dynamic-power reduction than 10K) is specifically about dynamic
+  power. Total power could tell a different story, since leakage
+  typically matters far more at 300K than at 10K — a leakage-blind
+  tool is closer to "correct by construction" at cryo than at room
+  temperature, not the other way around.
+- This is exactly why `set_opt_config -sizing_leakage_limit` (the
+  OpenROAD resizer knob identified separately, operating downstream at
+  placement/CTS/routing and reading real leakage values) is worth
+  keeping as the complementary piece for a total-power story: `map -d`
+  for dynamic power at synthesis, `-sizing_leakage_limit` for leakage
+  at physical design.
+
 ## The bug found (fixed in commit `29e51036d`)
 
 `src/base/abci/abc.c`, `Abc_CommandMap()`:
