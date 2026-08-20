@@ -1,0 +1,84 @@
+.model radd8
+.inputs a0 a1 a2 a3 a4 a5 a6 a7 b0 b1 b2 b3 b4 b5 b6 b7 cin
+.outputs s0 s1 s2 s3 s4 s5 s6 s7 cout
+.names a0 b0 cin s0
+000 1
+011 1
+101 1
+110 1
+.names a0 b0 cin c0
+011 1
+101 1
+110 1
+111 1
+.names a1 b1 c0 s1
+000 1
+011 1
+101 1
+110 1
+.names a1 b1 c0 c1
+011 1
+101 1
+110 1
+111 1
+.names a2 b2 c1 s2
+000 1
+011 1
+101 1
+110 1
+.names a2 b2 c1 c2
+011 1
+101 1
+110 1
+111 1
+.names a3 b3 c2 s3
+000 1
+011 1
+101 1
+110 1
+.names a3 b3 c2 c3
+011 1
+101 1
+110 1
+111 1
+.names a4 b4 c3 s4
+000 1
+011 1
+101 1
+110 1
+.names a4 b4 c3 c4
+011 1
+101 1
+110 1
+111 1
+.names a5 b5 c4 s5
+000 1
+011 1
+101 1
+110 1
+.names a5 b5 c4 c5
+011 1
+101 1
+110 1
+111 1
+.names a6 b6 c5 s6
+000 1
+011 1
+101 1
+110 1
+.names a6 b6 c5 c6
+011 1
+101 1
+110 1
+111 1
+.names a7 b7 c6 s7
+000 1
+011 1
+101 1
+110 1
+.names a7 b7 c6 cout
+011 1
+101 1
+110 1
+111 1
+.end
