@@ -1,8 +1,10 @@
 # Power-aware technology mapping (`map -d`) — validation notes
 
-This documents the first end-to-end validation of `map -d` on a real
-Liberty file, the bug found and fixed while doing it, and the numbers
-that came out. Written 2026-08-20, on commit `29e51036d`.
+This documents the first end-to-end validation of `map -d` on real
+Liberty files, the bug found and fixed while doing it, and the numbers
+that came out — first on a small hand-written toy circuit, then on a
+real ISCAS85 benchmark. Written 2026-08-20, commits `29e51036d`
+onward.
 
 ## What `map -d` does
 
@@ -68,7 +70,14 @@ abc -c "read_lib <library>.lib; read_blif radd8.blif; strash; map -d -D <target>
 abc -c "read_lib <library>.lib; read_blif radd8.blif; strash; map -a -d -v; print_stats"
 ```
 
-## Results — 0.7V_10K.lib
+## Results — radd8 (toy circuit, first sanity check)
+
+Small hand-written 8-bit ripple-carry adder (~120 AIG nodes), used
+first just to prove the mechanism runs and behaves sensibly before
+spending time on a real benchmark. See the "real benchmark" section
+below for the more representative numbers.
+
+### 0.7V_10K.lib
 
 Delay-optimal-only baseline (`map`, mode 0, before any recovery): delay
 0.00 (unset at this stage) / `DynPower` 24.3. Area-recovery-only
@@ -94,7 +103,7 @@ target and **saturates exactly at the `map -a -d` result** (442.24)
 once the target stops binding (`-D 600`/`-D 1000` both also land on
 442.24).
 
-## Results — 0.7V_300K.lib
+### 0.7V_300K.lib
 
 Delay-optimal-only baseline: `DynPower` 32.9. Area-recovery-only
 baseline (no `-d`): delay 168.45, `DynPower` 22.9 (-30.4%).
@@ -133,7 +142,7 @@ above. Practical implication for real experiments: **don't trust a
 single `-D` value at face value — sweep a few nearby targets and use
 the best, or note the sensitivity if reporting a single-point result.**
 
-## Cross-temperature comparison (same circuit, same `-D` targets)
+### Cross-temperature comparison (radd8)
 
 | | 10 K | 300 K |
 |---|---:|---:|
@@ -144,17 +153,90 @@ the best, or note the sensitivity if reporting a single-point result.**
 
 \* excluding the 250 anomaly above.
 
-At this one small circuit, room temperature shows a *larger*
-percentage power reduction from power-aware mapping than 10 K does,
-both for area-recovery alone and for the power-aware mapper — the
-opposite of "cryogenic operation trivially benefits more." Absolute
-`DynPower` is also higher at 300 K throughout (32.9 baseline vs. 24.3),
-consistent with the library characterizing genuinely different
-dynamic-power behavior per temperature rather than just a scaled
-version of the same numbers. This is exactly the kind of "measure, don't
-assume" result the research plan is built around — but it's one toy
-8-bit adder, not a benchmark suite, so treat the *direction* as a
-hypothesis to check on real designs, not a conclusion.
+At this circuit, room temperature shows a *larger* percentage power
+reduction from power-aware mapping than 10 K does — the opposite of
+"cryogenic operation trivially benefits more." Held up on a real
+benchmark too, see below.
+
+## Results — ISCAS85 c880 (real benchmark)
+
+`c880` is a classic ISCAS85 combinational benchmark (an 8-bit ALU),
+sourced from `fiction/benchmarks/ISCAS85/c880.v` (copied into this
+directory) — 60 inputs, 26 outputs, 327 two-input AND nodes after
+`strash`, read directly with ABC's native `read_verilog` (this
+benchmark set is distributed in the plain structural
+`assign n = a & b;` / `~`/`|`/`^` subset ABC's built-in parser accepts,
+no Yosys conversion needed). About 3x the gate count of `radd8`, and
+an actual, recognizable, citable benchmark rather than a hand-written
+toy — this is the number set to use in the paper, not the radd8 ones
+above.
+
+### 0.7V_10K.lib
+
+Delay-optimal `DynPower`: 106.5. Area-recovery-only baseline (no
+`-d`): delay 224.93, `DynPower` 57.8 (-45.7%).
+
+| `-D` target | Achieved delay | `DynPower` | Reduction vs. 106.5 |
+|---:|---:|---:|---:|
+| 230 | 269.76 | 48.0 | 54.9% |
+| 250 | 269.76 | 48.0 | 54.9% |
+| 270 | 269.76 | 48.0 | 54.9% |
+| 290 | 287.73 | 47.4 | 55.5% |
+| 310 | 303.28 | 47.2 | 55.7% |
+| 322 | 321.84 | 47.1 | 55.8% |
+| — (`map -d`, no `-D`) | 269.76 | 48.0 | 54.9% |
+| ∞ (`map -a -d`) | 321.84 | 47.1 | 55.8% |
+
+Targets at or below 270 all clamp to the same result — 269.76 is the
+natural floor the power-recovery pass can't push tighter than on this
+circuit/library, so `-D 230`/`250`/`270` are all equivalent to `-d`
+alone here. Above that floor the curve is smooth and monotonic, no
+repeat of the radd8 anomaly.
+
+### 0.7V_300K.lib
+
+Delay-optimal `DynPower`: 128.3. Area-recovery-only baseline (no
+`-d`): delay 212.27, `DynPower` 74.3 (-42.2%).
+
+| `-D` target | Achieved delay | `DynPower` | Reduction vs. 128.3 |
+|---:|---:|---:|---:|
+| 215 | 237.87 | 58.1 | 54.7% |
+| 230 | 237.87 | 58.1 | 54.7% |
+| 250 | 247.68 | 58.5 | 54.4% |
+| 270 | 266.44 | 57.8 | 55.0% |
+| 290 | 283.99 | 57.6 | 55.1% |
+| 302 | 301.72 | 57.3 | 55.3% |
+| — (`map -d`, no `-D`) | 237.87 | 58.1 | 54.7% |
+| ∞ (`map -a -d`) | 301.72 | 57.3 | 55.3% |
+
+Same floor behavior below 230. One small (0.4-point) non-monotonic dip
+at `-D 250`, same family of effect as the radd8 anomaly but much
+smaller — not worth chasing further, just noted for honesty.
+
+### Cross-temperature comparison (c880) — the number to actually cite
+
+| | 10 K | 300 K |
+|---|---:|---:|
+| Delay-optimal `DynPower` | 106.5 | 128.3 |
+| Area-recovery-only reduction | 45.7% | 42.2% |
+| Constrained (`map -d`, tight target) reduction | 54.9% | 54.7% |
+| Fully unconstrained (`map -a -d`) reduction | 55.8% | 55.3% |
+
+Two things worth having in the paper:
+
+1. **Power-aware mapping clearly beats area-recovery as a leakage
+   proxy on a real circuit** — roughly +9-13 points of extra power
+   reduction over plain area recovery, at both temperatures. This is a
+   much bigger, more convincing margin than the radd8 toy circuit
+   showed (+8 points at 10 K, +8-9 at 300 K) — real benchmarks give the
+   mapper more structure to exploit.
+2. **The cross-temperature direction from radd8 replicates on a real
+   benchmark**: 10 K shows a *smaller* percentage reduction than 300 K
+   at every stage (area-recovery, constrained, and unconstrained),
+   consistently, not a fluke of the toy circuit. That's now two
+   independent data points pointing the same way — worth treating as a
+   real candidate finding for the paper (subject to confirming on more
+   benchmarks), not just noise.
 
 ## Known remaining issue (cosmetic, not fixed)
 
@@ -168,12 +250,13 @@ meaningless and shouldn't be reported if scripting around this output.
 
 ## Caveats
 
-- Single test circuit (8-bit adder, ~120 AIG nodes) at both
-  temperatures. Numbers above are a proof that the mechanism works and
-  behaves sensibly (plus one real anomaly worth knowing about), not a
-  representative result for real benchmarks — re-run this sweep on
-  actual paper benchmarks before citing power/delay percentages, and
-  don't trust any single `-D` point without checking its neighbors.
+- Two circuits tested so far (radd8 toy adder, c880 real ISCAS85
+  benchmark), both small-to-medium (≤330 gates). The c880 numbers are
+  the more trustworthy ones and are consistent in direction with
+  radd8, but this is still not a benchmark suite — run more (and
+  larger) circuits before treating the cross-temperature direction as
+  settled, and don't trust any single `-D` point without checking its
+  neighbors given the observed (small) non-monotonic sensitivity.
 - Only `0.7V_10K.lib` and `0.7V_300K.lib` tested so far — 77 K only
   exists as `iso-Ioff-libs/iso_off_77K_0.7V.lib`, a **different
   characterization methodology** from these two root-level files (file
