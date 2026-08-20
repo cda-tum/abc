@@ -47,8 +47,9 @@ via `-a -d` (unchanged behavior, same as it always was for area).
 
 ## Test setup
 
-- Library: `0.7V_10K.lib` (cryogenic, 10 K, from
-  `cda-tum/cryogenic-cmos/standard_cell_libraries/`)
+- Libraries: `0.7V_10K.lib` and `0.7V_300K.lib` (from
+  `cda-tum/cryogenic-cmos/standard_cell_libraries/`), same 0.7 V
+  supply, cryogenic (10 K) vs. room temperature.
 - Circuit: `radd8.blif`, in this directory — a hand-written 8-bit
   ripple-carry adder (17 inputs, 9 outputs, chained from 8 one-bit
   full-adder `.names` blocks), chosen as a small circuit with enough
@@ -57,25 +58,22 @@ via `-a -d` (unchanged behavior, same as it always was for area).
   to generate a test case.
 - Build: plain `make -j6` (Makefile build, `ABC_USE_PTHREADS`), no
   special flags.
-- Baseline for comparison: `map` (no `-d`), delay-optimal + area
-  recovery, no `-D` — achieves delay 177.94, `DynPower` 18.4 (a 24.6%
-  reduction from the pure delay-optimal pass's 24.3 baseline, via area
-  recovery alone).
 
 ## Commands run
 
 ```
-abc -c "read_lib 0.7V_10K.lib; read_blif radd8.blif; strash; map -v; print_stats"
-abc -c "read_lib 0.7V_10K.lib; read_blif radd8.blif; strash; map -d -v; print_stats"
-abc -c "read_lib 0.7V_10K.lib; read_blif radd8.blif; strash; map -d -D <target> -v; print_stats"
-abc -c "read_lib 0.7V_10K.lib; read_blif radd8.blif; strash; map -a -d -v; print_stats"
+abc -c "read_lib <library>.lib; read_blif radd8.blif; strash; map -v; print_stats"
+abc -c "read_lib <library>.lib; read_blif radd8.blif; strash; map -d -v; print_stats"
+abc -c "read_lib <library>.lib; read_blif radd8.blif; strash; map -d -D <target> -v; print_stats"
+abc -c "read_lib <library>.lib; read_blif radd8.blif; strash; map -a -d -v; print_stats"
 ```
 
-## Results
+## Results — 0.7V_10K.lib
 
 Delay-optimal-only baseline (`map`, mode 0, before any recovery): delay
 0.00 (unset at this stage) / `DynPower` 24.3. Area-recovery-only
-baseline (`map`, final): delay 177.94, `DynPower` 18.4 (-24.6%).
+baseline (`map`, final, no `-d`): delay 177.94, `DynPower` 18.4
+(-24.6%).
 
 Constrained power recovery (`map -d -D <target>`), sweeping the target
 from tight to loose:
@@ -91,22 +89,72 @@ from tight to loose:
 | — (`map -d`, no `-D`) | 185.39 | 16.3 | 32.9% |
 | ∞ (`map -a -d`) | 442.24 | 15.9 | 34.6% |
 
-Observations:
+Clean and monotonic across the whole sweep: achieved delay tracks the
+target and **saturates exactly at the `map -a -d` result** (442.24)
+once the target stops binding (`-D 600`/`-D 1000` both also land on
+442.24).
 
-- Achieved delay tracks the requested target monotonically and
-  **saturates exactly at the `map -a -d` (fully unconstrained) result**
-  once the target stops binding (`-D 600` and `-D 1000` both also give
-  442.24 — table stops at 442, the natural ceiling, since looser
-  targets past that produce no further change).
-- Power-aware mapping beats area-recovery-only power reduction
-  (32.9–34.6% vs. 24.6%) at a comparable or even tighter delay — the
-  power objective is doing something area alone doesn't.
-- Diminishing returns are visible: most of the power win (32.9%) is
-  already captured at a delay target close to the original
-  delay-optimal critical path (177.94 → 185.39, +4%). Going all the
-  way to fully unconstrained (+148% delay) only buys another 1.7
-  points of power reduction. That shape — steep near the optimum, flat
-  after — is exactly what a slack-harvesting argument needs to show.
+## Results — 0.7V_300K.lib
+
+Delay-optimal-only baseline: `DynPower` 32.9. Area-recovery-only
+baseline (no `-d`): delay 168.45, `DynPower` 22.9 (-30.4%).
+Fully unconstrained (`map -a -d`): delay 411.37, `DynPower` 19.6
+(-40.3%).
+
+| `-D` target | Achieved delay | `DynPower` | Reduction vs. 32.9 |
+|---:|---:|---:|---:|
+| 175 | 175.24 | 24.0 | 27.1% |
+| 200 | 187.75 | 20.1 | 38.9% |
+| 210 | 200.26 | 20.1 | 38.9% |
+| 220 | 213.59 | 20.0 | 39.2% |
+| 230 | 225.02 | 20.1 | 38.9% |
+| 240 | 237.53 | 19.9 | 39.5% |
+| 250 | 249.78 | **22.8** | 30.7% |
+| 260 | 250.86 | 20.0 | 39.2% |
+| 270 | 262.29 | 19.9 | 39.5% |
+| 280 | 274.80 | 19.9 | 39.5% |
+| 300 | 299.56 | 19.9 | 39.5% |
+| 350 | 349.34 | 19.8 | 39.8% |
+| 411 | 399.94 | 19.7 | 40.1% |
+| ∞ (`map -a -d`) | 411.37 | 19.6 | 40.3% |
+
+**Anomaly:** the point at `-D 250` is a genuine, reproducible outlier
+— re-ran it twice, byte-identical both times, and the neighboring
+targets (240 → 19.9, 260 → 20.0) bracket it tightly while 250 itself
+jumps to 22.8. Not a fluke, not nondeterminism. Most likely explanation
+is the known brittleness of greedy, single-pass local-search recovery
+heuristics near specific required-time threshold values — a slightly
+different required time can shift which cuts tie and get selected at a
+handful of nodes, landing in a different local optimum. This is a
+general characteristic of this class of heuristic (ABC's plain
+area-recovery can show the same kind of sensitivity in principle), not
+something specific to the power path or to the `-D`/`fDynPower` fix
+above. Practical implication for real experiments: **don't trust a
+single `-D` value at face value — sweep a few nearby targets and use
+the best, or note the sensitivity if reporting a single-point result.**
+
+## Cross-temperature comparison (same circuit, same `-D` targets)
+
+| | 10 K | 300 K |
+|---|---:|---:|
+| Delay-optimal `DynPower` | 24.3 | 32.9 |
+| Area-recovery-only reduction | 24.6% | 30.4% |
+| Constrained (`map -d`, tight target) reduction | ~32.9% | ~38.9%* |
+| Fully unconstrained (`map -a -d`) reduction | 34.6% | 40.3% |
+
+\* excluding the 250 anomaly above.
+
+At this one small circuit, room temperature shows a *larger*
+percentage power reduction from power-aware mapping than 10 K does,
+both for area-recovery alone and for the power-aware mapper — the
+opposite of "cryogenic operation trivially benefits more." Absolute
+`DynPower` is also higher at 300 K throughout (32.9 baseline vs. 24.3),
+consistent with the library characterizing genuinely different
+dynamic-power behavior per temperature rather than just a scaled
+version of the same numbers. This is exactly the kind of "measure, don't
+assume" result the research plan is built around — but it's one toy
+8-bit adder, not a benchmark suite, so treat the *direction* as a
+hypothesis to check on real designs, not a conclusion.
 
 ## Known remaining issue (cosmetic, not fixed)
 
@@ -120,9 +168,17 @@ meaningless and shouldn't be reported if scripting around this output.
 
 ## Caveats
 
-- Single test circuit (8-bit adder, ~120 AIG nodes). Numbers above are
-  a proof that the mechanism works and behaves sensibly, not a
+- Single test circuit (8-bit adder, ~120 AIG nodes) at both
+  temperatures. Numbers above are a proof that the mechanism works and
+  behaves sensibly (plus one real anomaly worth knowing about), not a
   representative result for real benchmarks — re-run this sweep on
-  actual paper benchmarks before citing power/delay percentages.
-- Only ran on `0.7V_10K.lib`. Same sweep should be repeated on
-  `0.7V_300K.lib` for a real cryogenic-vs-room-temperature comparison.
+  actual paper benchmarks before citing power/delay percentages, and
+  don't trust any single `-D` point without checking its neighbors.
+- Only `0.7V_10K.lib` and `0.7V_300K.lib` tested so far — 77 K only
+  exists as `iso-Ioff-libs/iso_off_77K_0.7V.lib`, a **different
+  characterization methodology** from these two root-level files (file
+  contents differ even for cells with identical nominal temperature —
+  confirmed by diffing `0.7V_10K.lib` against
+  `iso-Ioff-libs/iso_off_10K_0.7V.lib`). Don't mix root-level and
+  iso-Ioff files in the same comparison; use one methodology
+  consistently across all three temperature points if 77 K is added.
