@@ -156,12 +156,24 @@ int Scl_CommandReadLib( Abc_Frame_t * pAbc, int argc, char ** argv )
     int fUnit = 0;
     int fVerbose = 1;
     int fVeryVerbose = 0;
+    char * pDontUse[64];
+    int nDontUse = 0;
 
     Extra_UtilGetoptReset();
-    while ( ( c = Extra_UtilGetopt( argc, argv, "SGMdnuvwh" ) ) != EOF )
+    while ( ( c = Extra_UtilGetopt( argc, argv, "SGMXdnuvwh" ) ) != EOF )
     {
         switch ( c )
         {
+        case 'X':
+            if ( globalUtilOptind >= argc )
+            {
+                Abc_Print( -1, "Command line switch \"-X\" should be followed by a string.\n" );
+                goto usage;
+            }
+            if ( nDontUse < 64 )
+                pDontUse[nDontUse++] = argv[globalUtilOptind];
+            globalUtilOptind++;
+            break;
         case 'S':
             if ( globalUtilOptind >= argc )
             {
@@ -227,7 +239,9 @@ int Scl_CommandReadLib( Abc_Frame_t * pAbc, int argc, char ** argv )
     }
     fclose( pFile );
     // read new library
+    Abc_SclSetDontUsePatterns( pDontUse, nDontUse );
     pLib = Abc_SclReadLiberty( pFileName, fVerbose, fVeryVerbose );
+    Abc_SclSetDontUsePatterns( NULL, 0 );
     if ( pLib == NULL )
     {
         fprintf( pAbc->Err, "Reading SCL library from file \"%s\" has failed. \n", pFileName );
@@ -261,7 +275,7 @@ int Scl_CommandReadLib( Abc_Frame_t * pAbc, int argc, char ** argv )
     return 0;
 
 usage:
-    fprintf( pAbc->Err, "usage: read_lib [-SG float] [-M num] [-dnuvwh] <file>\n" );
+    fprintf( pAbc->Err, "usage: read_lib [-SG float] [-M num] [-X cell_pattern] [-dnuvwh] <file>\n" );
     fprintf( pAbc->Err, "\t           reads Liberty library from file\n" );
     fprintf( pAbc->Err, "\t-S float : the slew parameter used to generate the library [default = %.2f]\n", Slew );
     fprintf( pAbc->Err, "\t-G float : the gain parameter used to generate the library [default = %.2f]\n", Gain );

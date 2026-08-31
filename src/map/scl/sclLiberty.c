@@ -635,12 +635,48 @@ int Scl_LibertyReadCellIsFlop( Scl_Tree_t * p, Scl_Item_t * pCell )
             return 1;
     return 0;
 }
+// dont-use patterns supplied by read_lib -X (yosys passes its -dont_use
+// cells this way); matched against cell names with * and ? globbing
+static char ** s_pDontUsePatterns = NULL;
+static int     s_nDontUsePatterns = 0;
+void Abc_SclSetDontUsePatterns( char ** pPatterns, int nPatterns )
+{
+    s_pDontUsePatterns = pPatterns;
+    s_nDontUsePatterns = nPatterns;
+}
+static int Scl_LibertyGlobMatch( const char * pPat, const char * pStr )
+{
+    while ( *pPat )
+    {
+        if ( *pPat == '*' )
+        {
+            while ( *pPat == '*' ) pPat++;
+            if ( !*pPat ) return 1;
+            for ( ; *pStr; pStr++ )
+                if ( Scl_LibertyGlobMatch(pPat, pStr) )
+                    return 1;
+            return 0;
+        }
+        if ( !*pStr || (*pPat != '?' && *pPat != *pStr) )
+            return 0;
+        pPat++; pStr++;
+    }
+    return !*pStr;
+}
 int Scl_LibertyReadCellIsDontUse( Scl_Tree_t * p, Scl_Item_t * pCell )
 {
     Scl_Item_t * pAttr;
+    int i;
     Scl_ItemForEachChild( p, pCell, pAttr )
         if ( !Scl_LibertyCompare(p, pAttr->Key, "dont_use") )
             return 1;
+    if ( s_nDontUsePatterns )
+    {
+        char * pName = Scl_LibertyReadString( p, pCell->Head );
+        for ( i = 0; i < s_nDontUsePatterns; i++ )
+            if ( Scl_LibertyGlobMatch(s_pDontUsePatterns[i], pName) )
+                return 1;
+    }
     return 0;
 }
 char * Scl_LibertyReadCellArea( Scl_Tree_t * p, Scl_Item_t * pCell )
