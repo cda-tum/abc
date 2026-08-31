@@ -880,7 +880,8 @@ static float Abc_SclComputeAveragePower( SC_Cell ** p )
 {
     float a = Abc_SclComputeAverageNetSwitchingPower( p );
     float b = Abc_SclComputeAverageCellInternalPower( p );
-    assert( a > 0 && b >=0 );
+    // constant cells (TIEHI/TIELO) have no switching arcs: a == 0 is legal
+    assert( a >= 0 && b >= 0 );
     /*float div = 2;
     if ( b == 0 )
     {
