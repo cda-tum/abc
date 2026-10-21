@@ -346,6 +346,9 @@ Abc_Ntk_t * Abc_NtkFromIf( If_Man_t * pIfMan, Abc_Ntk_t * pNtk )
     }
     Extra_ProgressBarStop( pProgress );
     Vec_IntFree( vCover );
+    if ( pIfMan->pPars->fVerbose && pIfMan->pPars->fUserLutDecDc )
+        Abc_Print( 1, "DC best: evaluated = %d  with DC = %d  DC-only = %d  DC-cheaper = %d\n",
+            pIfMan->nDcBestEval, pIfMan->nDcBestWithDc, pIfMan->nDcBestOnly, pIfMan->nDcBestCheaper );
 
     // remove the constant node if not used
     pNodeNew = (Abc_Obj_t *)If_ObjCopy( If_ManConst1(pIfMan) );
@@ -463,52 +466,29 @@ void Abc_DecRecordToHop( Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Cut_t * pCut
     int val;
     if ( pIfMan->pPars->fUserLutDec )
     {
-        if ( pIfMan->pPars->fUserLutDecDc)
+        if ( pIfMan->pPars->fUserLutDecDc )
         {
-            word *pCareSet = If_CutCsW( pIfMan, pCutBest );
-
-            /*int nWords = ( pCutBest->nLeaves <= 6 ) ? 1 : ( 1 << ( pCutBest->nLeaves - 6 ) );
-            int allOnes = 1;
-            for ( int j = 0; j < nWords; ++j )
+            // the cut was evaluated with and without don't cares (If_LutDecEval); the care set is
+            // stored only when the decomposition with don't cares was chosen
+            pIfMan->nDcBestEval++;
+            pIfMan->nDcBestWithDc += pCutBest->fDcHasDc;
+            pIfMan->nDcBestOnly += pCutBest->fDcOnly;
+            pIfMan->nDcBestCheaper += pCutBest->fDcCheaper;
+            if ( pCutBest->iCutCare < 0 )
+                val = acd_decompose( pTruth, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delayProfile), decompArray );
+            else
             {
-                if ( pCareSet[j] != ~( word ) 0 )
-                {
-                    allOnes = 0;
-                    break;
-                }
+                // replay the evaluation (late-arriving mask and flag of If_LutDecEval); the profile
+                // it returns is the free set that the mapper already stored in decDelay
+                word * pCareSet = If_CutCsW( pIfMan, pCutBest );
+                delayProfile = pCutBest->decLate;
+                val = acd_dc_decompose( pTruth, pCareSet, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delayProfile), pCutBest->fDcTryNoLate, decompArray );
+                if ( val == 0 && delayProfile != pCutBest->decDelay )
+                    Abc_Print( 0, "Abc_DecRecordToHop: the replayed don't-care decomposition has profile %x, the mapper stored %x.\n", delayProfile, (unsigned)pCutBest->decDelay );
             }
-
-            if ( !allOnes )
-            {
-                printf( "CareSet: \n" );
-                for ( int j = 0; j < nWords; ++j )
-                {
-                    printf( "Block %i: %lu\n", j, pCareSet[j] );
-                }
-                printf( "Dont cares evaluated.\n" );
-            }*/
-
-            unsigned char decompArray2[92];
-            unsigned delay2 = delayProfile;
-            int val2 = acd_decompose( pTruth, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delay2), decompArray2 );
-
-            val = acd_dc_decompose( pTruth, pCareSet, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delayProfile), decompArray );
-
-            if (val2 != 0)
-            {
-                printf("Only DC decomposable.\n");
-            }
-
-            int num_nodes = (int)decompArray[1];
-            int num_nodes2 = (int)decompArray2[1];
-
-            if ( num_nodes < num_nodes2 )
-                printf("Smaller with DCs\n");
         }
         else
-        {
             val = acd_decompose( pTruth, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delayProfile), decompArray );
-        }
     }
     else if ( pIfMan->pPars->fUserLut2D )
     {
@@ -518,6 +498,8 @@ void Abc_DecRecordToHop( Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Cut_t * pCut
     {
         val = acdXX_decompose( pTruth, pIfMan->pPars->nLutDecSize, pCutBest->nLeaves, decompArray );
     }
+    if ( val != 0 )
+        Abc_Print( -1, "Abc_DecRecordToHop: the decomposition of the chosen %d-input cut failed (profile %x).\n", pCutBest->nLeaves, (unsigned)pCutBest->decDelay );
     assert( val == 0 );
 
     // convert the LUT-structure into a set of logic nodes in Abc_Ntk_t 

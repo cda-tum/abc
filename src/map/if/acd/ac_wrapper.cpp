@@ -176,51 +176,59 @@ int acdXX_decompose( word * pTruth, unsigned lutSize, unsigned nVars, unsigned c
 
 int acd_dc_evaluate( word * pTruth, word * pCareSet, unsigned nVars, int lutSize, unsigned *pdelay, unsigned *cost, int try_no_late_arrival )
 {
-    using namespace acd;
+  using namespace acd;
 
-    ac_decomposition_params ps;
-    ps.lut_size = lutSize;
-    ps.use_first = false;
-    ps.try_no_late_arrival = static_cast<bool>( try_no_late_arrival );
-    // ps.max_free_set_vars = 5;
-    ac_decomposition_stats st;
+  ac_dc_decomposition_params ps;
+  ps.lut_size = lutSize;
+  ps.max_free_set_vars = 4; // same limit as ac_decomposition_params, so -B differs from -Z only by the don't cares
+  ps.use_first = false;
+  ps.try_no_late_arrival = static_cast<bool>( try_no_late_arrival );
+  ac_dc_decomposition_stats st;
 
-    ac_dc_decomposition_impl acd( nVars, ps, &st );
-    int val = acd.run( pTruth, pCareSet, *pdelay );
+  ac_dc_decomposition_impl acd( nVars, ps, &st );
+  int val = acd.run( pTruth, pCareSet, *pdelay );
 
-    if ( val < 0 )
-    {
-        *pdelay = 0;
-        return -1;
-    }
+  if ( val < 0 )
+  {
+    *pdelay = 0;
+    return -1;
+  }
 
-    *pdelay = acd.get_profile();
-    *cost = st.num_luts;
-    return val;
+  *pdelay = acd.get_profile();
+  *cost = st.num_luts;
+  return val;
 }
 
-int acd_dc_decompose( word * pTruth, word * pCareSet, unsigned nVars, int lutSize, unsigned *pdelay, unsigned char *decomposition )
+/* Replays acd_dc_evaluate: *pdelay is the late-arriving mask and try_no_late_arrival the flag of
+   the evaluation, not the free set found by it. The column multiplicity with don't cares is a
+   heuristic whose result depends on the variable order, so running the engine with the free set
+   as profile (as acd_decompose does for the exact plain engine) can fail to find the
+   decomposition the evaluation found; the replay is deterministic and returns the same one. */
+int acd_dc_decompose( word * pTruth, word * pCareSet, unsigned nVars, int lutSize, unsigned *pdelay, int try_no_late_arrival, unsigned char *decomposition )
 {
-    using namespace acd;
+  using namespace acd;
 
-    ac_decomposition_params ps;
-    ps.lut_size = lutSize;
-    ps.use_first = true;
-    ac_decomposition_stats st;
+  ac_dc_decomposition_params ps;
+  ps.lut_size = lutSize;
+  ps.max_free_set_vars = 4;
+  ps.use_first = false;
+  ps.try_no_late_arrival = static_cast<bool>( try_no_late_arrival );
+  ac_dc_decomposition_stats st;
 
-    ac_dc_decomposition_impl acd( nVars, ps, &st );
-    acd.run( pTruth, pCareSet, *pdelay );
-    int val = acd.compute_decomposition();
+  ac_dc_decomposition_impl acd( nVars, ps, &st );
+  int val = acd.run( pTruth, pCareSet, *pdelay );
+  if ( val >= 0 )
+    val = acd.compute_decomposition();
 
-    if ( val < 0 )
-    {
-        *pdelay = 0;
-        return -1;
-    }
+  if ( val < 0 )
+  {
+    *pdelay = 0;
+    return -1;
+  }
 
-    *pdelay = acd.get_profile();
-    acd.get_decomposition( decomposition );
-    return 0;
+  *pdelay = acd.get_profile();
+  acd.get_decomposition( decomposition );
+  return 0;
 }
 
 ABC_NAMESPACE_IMPL_END

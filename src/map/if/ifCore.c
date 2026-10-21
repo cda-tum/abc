@@ -63,6 +63,7 @@ void If_ManSetDefaultPars( If_Par_t * pPars )
     pPars->fCutMin     =  0;
     pPars->fBidec      =  0;
     pPars->fUserLutDec =  0;
+    pPars->nDcWindowSize = 12;
     pPars->fUserLut2D  =  0;
     pPars->fVerbose    =  0;
 }
@@ -165,6 +166,14 @@ int If_ManPerformMappingComb( If_Man_t * p )
 //            1.0 * (p->nObjBytes + 2*sizeof(void *)) * If_ManObjNum(p) / (1<<20), 
 //            1.0 * p->nSetBytes * Mem_FixedReadMaxEntriesUsed(p->pMemSet) / (1<<20) );
         Abc_PrintTime( 1, "Total time", Abc_Clock() - clkTotal );
+        if ( p->pPars->fUserLutDecDc )
+        {
+            Abc_Print( 1, "DC cuts: evaluated = %d  with DC = %d  DC-only = %d  DC-cheaper = %d  (window %d)\n",
+                p->nDcCutsEval, p->nDcCutsWithDc, p->nDcCutsOnly, p->nDcCutsCheaper, p->pPars->nDcWindowSize );
+            Abc_PrintTime( 1, "DC time: care-set extraction", p->timeDcExtract );
+            Abc_PrintTime( 1, "DC time: plain evaluation   ", p->timeDcPlain );
+            Abc_PrintTime( 1, "DC time: DC evaluation      ", p->timeDcEval );
+        }
     }
 //    Abc_Print( 1, "Cross cut memory = %d.\n", Mem_FixedReadMaxEntriesUsed(p->pMemSet) );
     s_MappingTime = Abc_Clock() - clkTotal;

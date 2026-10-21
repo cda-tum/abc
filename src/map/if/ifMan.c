@@ -102,6 +102,17 @@ If_Man_t * If_ManStart( If_Par_t * pPars )
     p->puTemp[3] = p->pPars->fTruth? p->puTemp[2] + p->nTruth6Words[p->pPars->nLutSize]*2 : NULL;
     p->puTempW   = p->pPars->fTruth? ABC_ALLOC( word, p->nTruth6Words[p->pPars->nLutSize] ) : NULL;
     p->puTemp2W   = p->pPars->fTruth? ABC_ALLOC( word, p->nTruth6Words[p->pPars->nLutSize] ) : NULL;
+    if ( p->pPars->fUserLutDecDc )
+    {
+        p->vDcSim     = Vec_WrdAlloc( 1 << 12 );
+        p->vDcTouched = Vec_IntAlloc( 100 );
+        p->vDcSlot    = Vec_IntAlloc( 100 );
+        p->vDcInputs  = Vec_IntAlloc( 32 );
+        p->vDcNodes   = Vec_IntAlloc( 100 );
+        p->vDcLeafMem = Vec_MemAlloc( 9, 12 );  // nLeaves + up to 16 leaf ids as 18 ints
+        Vec_MemHashAlloc( p->vDcLeafMem, 10000 );
+        p->vDcLeafCare = Vec_IntAlloc( 10000 );
+    }
     if ( pPars->fUseDsd )
     {
         for ( v = 6; v <= Abc_MaxInt(6,p->pPars->nLutSize); v++ )
@@ -258,6 +269,17 @@ void If_ManStop( If_Man_t * p )
     Vec_WrdFreeP( &p->vAnds );
     Vec_WrdFreeP( &p->vAndGate );
     Vec_WrdFreeP( &p->vOrGate );
+    Vec_WrdFreeP( &p->vDcSim );
+    Vec_IntFreeP( &p->vDcTouched );
+    Vec_IntFreeP( &p->vDcSlot );
+    Vec_IntFreeP( &p->vDcInputs );
+    Vec_IntFreeP( &p->vDcNodes );
+    if ( p->vDcLeafMem )
+    {
+        Vec_MemHashFree( p->vDcLeafMem );
+        Vec_MemFreeP( &p->vDcLeafMem );
+    }
+    Vec_IntFreeP( &p->vDcLeafCare );
     Vec_PtrFreeP( &p->vObjsRev );
     Vec_PtrFreeP( &p->vLatchOrder );
     Vec_IntFreeP( &p->vLags );

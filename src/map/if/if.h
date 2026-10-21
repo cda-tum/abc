@@ -114,6 +114,7 @@ struct If_Par_t_
     int                nAndDelay;     // delay of AND-gate in LUT library units
     int                nAndArea;      // area of AND-gate in LUT library units
     int                nLutDecSize;   // the LUT size for decomposition
+    int                nDcWindowSize; // window inputs for care-set extraction (decomposition with don't cares)
     int                fPreprocess;   // preprossing
     int                fArea;         // area-oriented mapping
     int                fFancy;        // a fancy feature
@@ -218,6 +219,24 @@ struct If_Man_t_
     float              dPower;        // the sum total of switching activities of all LUTs in the mapping
     int                nCutsUsed;     // the number of cuts currently used
     int                nCutsMerged;   // the total number of cuts merged
+    int                nDcCutsEval;   // decomposition with don't cares: cuts above the LUT size evaluated
+    int                nDcCutsWithDc; // ... whose care set has at least one don't care
+    int                nDcCutsOnly;   // ... decomposable only with don't cares
+    int                nDcCutsCheaper;// ... decomposable with fewer LUTs or lower delay with don't cares
+    int                nDcBestEval;   // the same four counters for the chosen cuts
+    int                nDcBestWithDc;
+    int                nDcBestOnly;
+    int                nDcBestCheaper;
+    abctime            timeDcExtract; // time in If_ExtractDc
+    abctime            timeDcPlain;   // time in acd_evaluate (-B only)
+    abctime            timeDcEval;    // time in acd_dc_evaluate
+    Vec_Wrd_t *        vDcSim;        // simulation buffer of the care-set window, reused across cuts
+    Vec_Mem_t *        vDcLeafMem;    // hashed leaf sets of evaluated cuts (the care set depends on the leaves only)
+    Vec_Int_t *        vDcLeafCare;   // leaf set id -> care-set literal in vTtMem[nLeaves], or -1 if all ones
+    Vec_Int_t *        vDcTouched;    // objects whose fVisit mark the window code set
+    Vec_Int_t *        vDcSlot;       // object id -> slot in vDcSim (-1 outside the window)
+    Vec_Int_t *        vDcInputs;     // window inputs
+    Vec_Int_t *        vDcNodes;      // window nodes in topological order
     unsigned *         puTemp[4];     // used for the truth table computation
     word *             puTempW;       // used for the truth table computation
     word *             puTemp2W;       // used for the truth table computation
@@ -318,6 +337,11 @@ struct If_Cut_t_
     unsigned           nLimit  :  8;  // the maximum number of leaves
     unsigned           nLeaves :  8;  // the number of leaves
     unsigned           decDelay: 16;  // pin-to-pin decomposition delay
+    unsigned           fDcHasDc:  1;  // care set of the cut has at least one don't care
+    unsigned           fDcOnly :  1;  // decomposable only with don't cares
+    unsigned           fDcCheaper: 1; // decomposable with fewer LUTs or lower delay with don't cares
+    unsigned           fDcTryNoLate:1;// the don't-care evaluation ran with try_no_late_arrival
+    unsigned           decLate : 16;  // late-arriving leaf mask passed to the don't-care evaluation (replayed by Abc_DecRecordToHop)
     int                pLeaves[0];
 };
 
@@ -716,7 +740,7 @@ extern int             acd_decompose( word * pTruth, unsigned nVars, int lutSize
 extern int             acd2_evaluate( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned *cost, int try_no_late_arrival );
 extern int             acd2_decompose( word * pTruth, unsigned nVars, int lutSize, unsigned *pdelay, unsigned char *decomposition );
 int acd_dc_evaluate( word * pTruth, word * pCareSet, unsigned nVars, int lutSize, unsigned *pdelay, unsigned *cost, int try_no_late_arrival );
-int acd_dc_decompose( word * pTruth, word * pCareSet, unsigned nVars, int lutSize, unsigned *pdelay, unsigned char *decomposition );
+int acd_dc_decompose( word * pTruth, word * pCareSet, unsigned nVars, int lutSize, unsigned *pdelay, int try_no_late_arrival, unsigned char *decomposition );
 
 ABC_NAMESPACE_HEADER_END
 
