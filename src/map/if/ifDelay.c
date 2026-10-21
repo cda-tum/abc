@@ -412,6 +412,306 @@ int If_CutLutBalanceEval( If_Man_t * p, If_Cut_t * pCut )
     }
 }
 
+static inline int If_NodeGetLeafCostOne( If_Obj_t * pObj )
+{
+    int Cost;
+
+    assert( pObj->fVisit == 1 );  // must be in the current cone
+
+    if ( If_ObjIsCi( pObj ) )
+        return 999;
+
+    Cost = (!If_ObjFanin0(pObj)->fVisit) + (!If_ObjFanin1(pObj)->fVisit);
+
+    return Cost;
+}
+
+int If_ManCreateWindow( If_Man_t * p, If_Cut_t * pCut, Vec_Int_t * vInputs )
+{
+    int i, bestCost, bestPos, cost, Entry;
+    If_Obj_t * pLeaf, * pFanin, * pBest;
+
+    int maxLeaves = 12;
+
+    If_ManCleanMarkV( p );
+
+    // push all Cut Leaves to vInputs
+    If_CutForEachLeaf( p, pCut, pLeaf, i )
+    {
+        pLeaf->fVisit = 1;
+        Vec_IntPush( vInputs, pLeaf->Id );
+    }
+
+    // Greedily expand the window
+    while ( 1 )
+    {
+        bestCost = 100;
+        bestPos = -1;
+        pBest = NULL;
+
+        Vec_IntForEachEntry( vInputs, Entry, i )
+        {
+            pLeaf = If_ManObj( p, Entry );
+            cost = If_NodeGetLeafCostOne( pLeaf );
+
+            if ( cost < bestCost || (cost == bestCost && pBest && pLeaf->Level > pBest->Level) )
+            {
+                bestCost = cost;
+                pBest = pLeaf;
+                bestPos = i;
+            }
+
+            if ( bestCost == 0 )
+                break;
+        }
+
+        assert(bestPos >= 0 && bestPos < Vec_IntSize(vInputs) || pBest == NULL);
+        if ( pBest == NULL || Vec_IntSize(vInputs) - 1 + bestCost > maxLeaves )
+            break;
+
+        // Move to last and delete last
+        if ( bestPos != Vec_IntSize(vInputs) - 1 )
+            Vec_IntWriteEntry(vInputs, bestPos, Vec_IntEntry(vInputs, Vec_IntSize(vInputs) - 1));
+        vInputs->nSize--;
+
+        // Add fanins of pBest to vInputs
+        pFanin = If_ObjFanin0( pBest );
+        if ( pFanin && pFanin->fVisit != 1 && !If_ObjIsConst1(pFanin) )
+        {
+            pFanin->fVisit = 1;
+            Vec_IntPush( vInputs, pFanin->Id );
+        }
+
+        pFanin = If_ObjFanin1( pBest );
+        if ( pFanin && pFanin->fVisit != 1 && !If_ObjIsConst1(pFanin) )
+        {
+            pFanin->fVisit = 1;
+            Vec_IntPush( vInputs, pFanin->Id );
+        }
+    }
+
+    // Check if all leaves in pCut are contained
+    for ( i = 0; i < (int)pCut->nLeaves; ++i )
+    {
+        If_Obj_t * pCutLeaf = If_ManObj( p, pCut->pLeaves[i] );
+        if ( !pCutLeaf->fVisit )
+        {
+            return 0;
+        }
+    }
+
+    return 1;
+}
+
+void If_ManCollectNodesRec( If_Man_t *p, If_Obj_t *pNode, Vec_Int_t *vNodes )
+{
+    If_Obj_t *pFanin;
+
+    if ( pNode->fVisit == 1 )
+        return;
+
+    pNode->fVisit = 1;
+
+    // for each fan-in recursively collect the nodes
+    pFanin = If_ObjFanin0( pNode );
+    if (If_ObjIsConst1( pFanin ))
+        return;
+    If_ManCollectNodesRec( p, pFanin, vNodes );
+    pFanin = If_ObjFanin1( pNode );
+    if (If_ObjIsConst1( pFanin ))
+        return;
+    If_ManCollectNodesRec( p, pFanin, vNodes );
+
+    Vec_IntPush( vNodes, pNode->Id );
+}
+
+void If_ManCollectNodes( If_Man_t *p, If_Cut_t *pCut, Vec_Int_t *vInputs, Vec_Int_t *vNodes )
+{
+    int i, j, Entry;
+    If_Obj_t *pInput, *pLeaf;
+
+    If_ManCleanMarkV( p );
+
+    Vec_IntForEachEntry( vInputs, Entry, i )
+    {
+        pInput = If_ManObj(p, Entry);
+        pInput->fVisit = 1;
+    }
+
+    If_CutForEachLeaf( p, pCut, pLeaf, j )
+    {
+        If_ManCollectNodesRec( p, pLeaf, vNodes );
+    }
+
+    If_CutForEachLeaf( p, pCut, pLeaf, j )
+    {
+        if ( !pLeaf->fVisit )
+        {
+            pLeaf->fVisit = 1;
+            Vec_IntPush( vNodes, pLeaf->Id );
+        }
+    }
+}
+
+static const word s_Proj6[6] = {
+        0xaaaaaaaaaaaaaaaaULL, // x0 = 101010...
+        0xccccccccccccccccULL, // x1 = 11001100...
+        0xf0f0f0f0f0f0f0f0ULL, // x2 = 11110000...
+        0xff00ff00ff00ff00ULL, // x3 = 8-8 alternating 0s/1s
+        0xffff0000ffff0000ULL, // x4 = 16-16 alternating
+        0xffffffff00000000ULL  // x5 = 32-32 alternating
+};
+
+void If_ManTruthCreateVar( word* pTruth, int nVars, int varIdx, int fCompl )
+{
+    assert( varIdx < nVars );
+    assert( nVars <= 16 );
+
+    const int nBits  = (1 << nVars);
+    const word nWords = ( nVars <= 6 ) ? 1 : ( 1 << ( nVars - 6 ) );
+
+    if ( varIdx < 6 && nVars <= 6 )
+    {
+        pTruth[0] = fCompl ? ~s_Proj6[varIdx] : s_Proj6[varIdx];
+        // Mask unused bits in the last word
+        if ( nBits < 64 )
+        {
+            pTruth[0] &= ~(~(word)0 << nBits);
+        }
+        return;
+    }
+
+    if ( varIdx < 6 )
+    {
+        word pattern = fCompl ? ~s_Proj6[varIdx] : s_Proj6[varIdx];
+        for ( int i = 0; i < nWords; ++i )
+            pTruth[i] = pattern;
+        return;
+    }
+
+    // varIdx ≥ 6 → alternating blocks
+    const int c = 1 << ( varIdx - 6 );
+    const word zero = 0ULL;
+    const word one = ~zero;
+    ABC_UINT64_T block = 0ULL;
+
+    while ( block < nWords )
+    {
+        for ( int i = 0; i < c; ++i )
+        {
+            pTruth[block++] = fCompl ? one : zero;
+        }
+        for ( int i = 0; i < c; ++i )
+        {
+            pTruth[block++] = fCompl ? zero : one;
+        }
+    }
+}
+
+void If_ManSimulateWindow( If_Man_t* p, Vec_Int_t* vInputs, Vec_Int_t* vNodes, Vec_Ptr_t* vSimTts )
+{
+    int Entry, i;
+    int nWords = ( Vec_IntSize(vInputs) <= 6 ) ? 1 : ( 1 << ( Vec_IntSize(vInputs) - 6 ) );
+
+    // Initialize PI values for each leaf of the window
+    Vec_IntForEachEntry(vInputs, Entry, i)
+    {
+        word* pTruth = ABC_ALLOC( word, nWords );
+        If_ManTruthCreateVar( pTruth, Vec_IntSize(vInputs), i, 0 );
+        Vec_PtrWriteEntry( vSimTts, Entry, pTruth );
+    }
+
+    // Simulate internal nodes in topo order
+    Vec_IntForEachEntry( vNodes, Entry, i )
+    {
+        If_Obj_t* pObj = If_ManObj( p, Entry );
+
+        if ( If_ObjIsCi(pObj) )
+            printf("This does not make sense");
+
+        word* pFan0Orig = (word*)Vec_PtrEntry( vSimTts, If_ObjFanin0(pObj)->Id );
+        word* pFan1Orig = (word*)Vec_PtrEntry( vSimTts, If_ObjFanin1(pObj)->Id );
+
+        // Allocate result for this node
+        word* pResult = ABC_ALLOC( word, nWords );
+
+        // Handle complemented fanins using temp copies
+        word* pFan0 = ABC_ALLOC( word, nWords );
+        word* pFan1 = ABC_ALLOC( word, nWords );
+        Abc_TtCopy( pFan0, pFan0Orig, nWords, If_ObjFaninC0(pObj) );
+        Abc_TtCopy( pFan1, pFan1Orig, nWords, If_ObjFaninC1(pObj) );
+
+        // Compute AND and store result
+        Abc_TtAnd( pResult, pFan0, pFan1, nWords, 0 );
+        Vec_PtrWriteEntry( vSimTts, pObj->Id, pResult );
+
+        ABC_FREE( pFan0 );
+        ABC_FREE( pFan1 );
+    }
+}
+
+
+word If_ManGetBit( const word * pTt, int index )
+{
+    return ( pTt[index >> 6] >> ( index & 0x3f ) ) & 0x1;
+}
+
+void If_ManSetBit( word * pTt, int index )
+{
+    pTt[index >> 6] |= (1ULL << (index & 0x3F));
+}
+
+void If_ManComputeCareSet( If_Man_t * p, If_Cut_t * pCut, Vec_Ptr_t * vSimTts, word * pCareSet, int nVars )
+{
+    int i, j;
+    If_Obj_t * pLeaf;
+
+    for ( i = 0; i < ( 1u << nVars ); ++i )  // ✅ correct simulation domain
+    {
+        word entry = 0;
+
+        If_CutForEachLeaf( p, pCut, pLeaf, j )
+        {
+            const word * NodeTt = (const word *)Vec_PtrEntry( vSimTts, pLeaf->Id );
+            entry |= ((word)If_ManGetBit( NodeTt, i )) << j;
+        }
+
+        If_ManSetBit( pCareSet, (int)entry );
+    }
+}
+
+int If_ExtractDc( If_Man_t * p, If_Cut_t * pCut, word * pCareSet )
+{
+    // Allocate the node vector
+    Vec_Int_t * vInputs = Vec_IntAlloc( 64 ); // initial capacity; growable
+    Vec_Int_t * vNodes = Vec_IntAlloc( 64 ); // initial capacity; growable
+
+    // Collect the Window Inputs
+    If_ManCreateWindow( p, pCut, vInputs );
+
+    // Collect the window nodes in topological order
+    If_ManCollectNodes( p, pCut, vInputs, vNodes );
+
+    // Simulate the window
+    Vec_Ptr_t* vSimTts = Vec_PtrStart( If_ManObjNum(p) );
+    If_ManSimulateWindow( p, vInputs, vNodes, vSimTts );
+    If_ManComputeCareSet( p, pCut, vSimTts, pCareSet, Vec_IntSize(vInputs) );
+
+    // Free the data structures used
+    for ( int i = 0; i < If_ManObjNum(p); ++i )
+    {
+        word* pE = (word*)Vec_PtrEntry( vSimTts, i );
+        if ( pE )
+            ABC_FREE( pE );
+    }
+    Vec_PtrFree( vSimTts );
+    Vec_IntFree( vInputs );
+    Vec_IntFree( vNodes );
+
+    return 1;
+}
+
+
 int If_LutDecEval( If_Man_t * p, If_Cut_t * pCut, If_Obj_t * pObj, int optDelay, int fFirst )
 {
     pCut->fUser = 1;
@@ -497,24 +797,9 @@ int If_LutDecEval( If_Man_t * p, If_Cut_t * pCut, If_Obj_t * pObj, int optDelay,
         int nWords = ( pCut->nLeaves <= 6 ) ? 1 : ( 1 << ( pCut->nLeaves - 6 ) );
         word* pCareSet = ABC_ALLOC( word, nWords );
         memset( pCareSet, 0, sizeof(word) * nWords );
-        // If_ExtractDcMin(p, pCut, pCareSet);
-        // test
-        for ( int j = 0; j < nWords; ++j )
-            pCareSet[j] = ~(word)0;
+        If_ExtractDc(p, pCut, pCareSet);
 
-        // save Care set for cut
-        int csId = Vec_MemHashInsert(p->vTtMem[pCut->nLeaves], pCareSet);
-        pCut->iCutCare = Abc_Var2Lit(csId, 0);
-
-        int allOnes = 1;
-        for ( int j = 0; j < nWords; ++j )
-        {
-            if ( pCareSet[j] != ~(word)0 )
-            {
-                allOnes = 0;
-                break;
-            }
-        }
+        int allOnes = 0;
 
         if ( !allOnes )
         {
@@ -526,20 +811,34 @@ int If_LutDecEval( If_Man_t * p, If_Cut_t * pCut, If_Obj_t * pObj, int optDelay,
             printf( "Dont cares evaluated.\n" );
         }
 
-        // for debugging
+        /*for ( int j = 0; j < nWords; ++j )
+        {
+            pCareSet[j] = ~(word)0;
+        }
+        pCareSet[0] = (word)0;*/
+        /*if ( nWords > 3 )
+        {
+            pCareSet[nWords-1] = (word)0;
+        }*/
+
+        // save Care set for cut
+        int csId = Vec_MemHashInsert(p->vTtMem[pCut->nLeaves], pCareSet);
+        pCut->iCutCare = Abc_Var2Lit(csId, 0);
+
         unsigned costdc = cost;
         unsigned uLDC = uLeafMask;
 
         val = acd_dc_evaluate( pTruth, pCareSet, pCut->nLeaves, LutSize, &uLeafMask, &cost, !use_late_arrival );
-
-        // for debugging
-        int val2 = acd_evaluate( pTruth, pCut->nLeaves, LutSize, &uLDC, &costdc, !use_late_arrival );
-        if ( val2 != val )
+        /*val = acd_evaluate( pTruth, pCut->nLeaves, LutSize, &uLeafMask, &cost, !use_late_arrival );
+        if ( val == -1)
         {
-            printf("This should not happen\n");
-            printf("val: %i \n", val);
-            printf("val2: %i \n", val2);
-        }
+            cost = costdc;
+            uLeafMask = uLDC;
+
+            val = acd_dc_evaluate( pTruth, pCareSet, pCut->nLeaves, LutSize, &uLeafMask, &cost, !use_late_arrival );
+            if ( val != -1 )
+                printf("Advantage.\n");
+        }*/
 
         ABC_FREE( pCareSet );
     }

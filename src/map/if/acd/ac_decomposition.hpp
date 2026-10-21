@@ -791,6 +791,11 @@ private:
   {
     uint32_t count = 0;
 
+    if (best_multiplicity == 1)
+    {
+      printf("Multiplicity is 1\n");
+    }
+
     /* enable don't cares only if not a power of 2 */
     uint32_t num_combs = 2;
     if ( __builtin_popcount( best_multiplicity ) == 1 )

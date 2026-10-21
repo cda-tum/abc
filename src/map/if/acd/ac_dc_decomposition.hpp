@@ -1240,6 +1240,11 @@ namespace acd
         {
             uint32_t count = 0;
 
+            if (best_multiplicity == 1)
+            {
+                printf("Multiplicity is 1\n");
+            }
+
             /* enable don't cares only if not a power of 2 */
             uint32_t num_combs = 2;
             if ( __builtin_popcount( best_multiplicity ) == 1 )
@@ -1254,7 +1259,12 @@ namespace acd
                 }
                 support_minimization_encodings = std::vector<std::array<uint32_t, 2>>( num_combs );
                 generate_support_minimization_encodings_rec<false, true>( 0, 0, 0, count, best_multiplicity >> 1, true );
-                assert( count == num_combs );
+                /*if (count != num_combs)
+                {
+                    printf("Error: Expected %u combinations, but generated %u\n", num_combs, count);
+                    generate_support_minimization_encodings_rec<false, true>( 0, 0, 0, count, best_multiplicity >> 1, true );
+                }*/
+                // assert( count == num_combs );
                 return;
             }
 

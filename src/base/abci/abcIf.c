@@ -463,13 +463,52 @@ void Abc_DecRecordToHop( Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Cut_t * pCut
     int val;
     if ( pIfMan->pPars->fUserLutDec )
     {
-        if ( pIfMan->pPars->fUserLutDecDc )
+        if ( pIfMan->pPars->fUserLutDecDc)
         {
-            word * pCareSet = If_CutCsW(pIfMan, pCutBest);
+            word *pCareSet = If_CutCsW( pIfMan, pCutBest );
+
+            /*int nWords = ( pCutBest->nLeaves <= 6 ) ? 1 : ( 1 << ( pCutBest->nLeaves - 6 ) );
+            int allOnes = 1;
+            for ( int j = 0; j < nWords; ++j )
+            {
+                if ( pCareSet[j] != ~( word ) 0 )
+                {
+                    allOnes = 0;
+                    break;
+                }
+            }
+
+            if ( !allOnes )
+            {
+                printf( "CareSet: \n" );
+                for ( int j = 0; j < nWords; ++j )
+                {
+                    printf( "Block %i: %lu\n", j, pCareSet[j] );
+                }
+                printf( "Dont cares evaluated.\n" );
+            }*/
+
+            unsigned char decompArray2[92];
+            unsigned delay2 = delayProfile;
+            int val2 = acd_decompose( pTruth, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delay2), decompArray2 );
+
             val = acd_dc_decompose( pTruth, pCareSet, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delayProfile), decompArray );
+
+            if (val2 != 0)
+            {
+                printf("Only DC decomposable.\n");
+            }
+
+            int num_nodes = (int)decompArray[1];
+            int num_nodes2 = (int)decompArray2[1];
+
+            if ( num_nodes < num_nodes2 )
+                printf("Smaller with DCs\n");
         }
         else
+        {
             val = acd_decompose( pTruth, pCutBest->nLeaves, pIfMan->pPars->nLutDecSize, &(delayProfile), decompArray );
+        }
     }
     else if ( pIfMan->pPars->fUserLut2D )
     {
