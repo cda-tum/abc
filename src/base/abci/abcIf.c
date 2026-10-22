@@ -558,8 +558,18 @@ void Abc_DecRecordToHop( Abc_Ntk_t * pNtkNew, If_Man_t * pIfMan, If_Cut_t * pCut
             }
         }
 
+        /* a one-input LUT (the don't-care engine can reduce a bound-set function or the top function
+           to a single variable): a buffer, an inverter or a constant, no truth-table extension */
+        if ( num_fanins == 1 )
+        {
+            unsigned v = (unsigned)( tt[0] & 3 );
+            Hop_Man_t * pMan = (Hop_Man_t *)pNtkNew->pManFunc;
+            if ( v == 2 )      pNewNodes[i]->pData = Hop_IthVar( pMan, 0 );
+            else if ( v == 1 ) pNewNodes[i]->pData = Hop_Not( Hop_IthVar( pMan, 0 ) );
+            else               pNewNodes[i]->pData = Hop_NotCond( Hop_ManConst1( pMan ), v == 0 );
+            continue;
+        }
         /* extend truth table if size < 5 */
-        assert( num_fanins != 1 );
         if ( num_fanins == 2 )
         {
             tt[0] |= tt[0] << 4;
